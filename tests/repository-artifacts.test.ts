@@ -107,4 +107,13 @@ describe('repository artifact security', () => {
     expect(security.toLowerCase()).toContain('defence in depth');
     expect(security).toMatch(/STOPPED/i);
   });
+
+  it('includes ChatGPT connection field guide and backlog', () => {
+    const fieldGuide = readRepoFile('docs/connecting-to-chatgpt.md');
+    const backlog = readRepoFile('docs/BACKLOG.md');
+
+    expect(fieldGuide).toContain('Secure MCP Tunnel');
+    expect(fieldGuide).toContain('restart: "no"');
+    expect(backlog.toLowerCase()).toContain('oauth');
+  });
 });

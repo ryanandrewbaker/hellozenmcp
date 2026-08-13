@@ -21,6 +21,15 @@ Exposes exactly four MCP tools:
 
 It does **not** access contacts, conversations, appointments, opportunity records, emails, form submissions, calendar events, or workflow enrolments.
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/connecting-to-chatgpt.md](docs/connecting-to-chatgpt.md) | Field guide: private MCP → Secure MCP Tunnel → ChatGPT (full setup and operations) |
+| [docs/BACKLOG.md](docs/BACKLOG.md) | Planned improvements |
+| [SECURITY.md](SECURITY.md) | Security policy and on-demand availability rationale |
+| [DEPLOYMENT.local.md.example](DEPLOYMENT.local.md.example) | Operator-specific deployment notes template (copy to gitignored `DEPLOYMENT.local.md`) |
+
 ## Read-only security model
 
 ### Application boundary
@@ -189,9 +198,11 @@ Use `docker compose stop` for normal shutdown. You do **not** need `docker compo
 
 After a Vision or Docker daemon reboot, the connector remains stopped until you explicitly start it again.
 
-## OpenAI Secure MCP Tunnel (next stage)
+## OpenAI Secure MCP Tunnel
 
-Do not expose this service on a public port. After review, connect via OpenAI Secure MCP Tunnel.
+Do not expose this service on a public port. Connect via OpenAI Secure MCP Tunnel after local verification.
+
+**Full setup guide:** [docs/connecting-to-chatgpt.md](docs/connecting-to-chatgpt.md) — repository preparation, Docker hardening, on-demand MCP, tunnel-client installation, `doctor` checks, ChatGPT app configuration, and operating procedures.
 
 ### Option A — tunnel client on the host
 
