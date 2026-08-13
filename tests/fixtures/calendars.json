@@ -1,0 +1,14 @@
+{
+  "calendars": [
+    {
+      "id": "cal_1",
+      "name": "Portrait Planning Call",
+      "description": "30-minute planning consultation",
+      "slotDuration": 30,
+      "isActive": true,
+      "timezone": "Australia/Melbourne",
+      "groupId": "grp_1",
+      "teamMembers": [{ "userId": "must-not-leak" }]
+    }
+  ]
+}

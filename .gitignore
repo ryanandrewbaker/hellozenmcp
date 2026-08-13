@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+DEPLOYMENT.local.md
+*.log
+.DS_Store
+coverage/

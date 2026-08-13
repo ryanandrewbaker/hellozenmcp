@@ -1,0 +1,16 @@
+# Secrets and local deployment notes (never bake into images)
+.env
+.env.*
+!.env.example
+DEPLOYMENT.local.md
+*.pem
+*.key
+*.p12
+
+# Repository and build artifacts
+.git
+.github
+node_modules
+dist
+coverage
+*.log

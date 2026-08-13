@@ -1,0 +1,8 @@
+# Secrets and local deployment notes
+.env
+.env.*
+!.env.example
+DEPLOYMENT.local.md
+*.pem
+*.key
+*.p12

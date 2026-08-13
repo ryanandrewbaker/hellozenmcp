@@ -1,0 +1,12 @@
+{
+  "workflows": [
+    {
+      "id": "wf_1",
+      "name": "Website Lead Nurture",
+      "status": "published",
+      "createdAt": "2025-01-15T10:00:00.000Z",
+      "updatedAt": "2025-02-01T12:00:00.000Z",
+      "locationId": "loc_example"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+# Copy to DEPLOYMENT.local.md (gitignored) for operator-specific notes.
+# Do not commit real credentials, domains, or personal identifiers.
+
+# Example operator deployment path (customize locally):
+# /devconcepts/hellozenmcp
+
+# docker compose up -d --build

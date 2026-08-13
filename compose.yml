@@ -1,0 +1,22 @@
+services:
+  hellozen-mcp:
+    container_name: hellozen-mcp
+    build: .
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8790:8790"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

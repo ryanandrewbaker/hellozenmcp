@@ -1,0 +1,22 @@
+{
+  "customFields": [
+    {
+      "id": "field_contact_1",
+      "name": "Session Type",
+      "fieldKey": "contact.session_type",
+      "model": "contact",
+      "dataType": "SINGLE_OPTIONS",
+      "picklistOptions": ["Newborn", "Family"],
+      "locationId": "loc_example",
+      "traceId": "must-not-leak"
+    },
+    {
+      "id": "field_opp_hidden",
+      "name": "Pipeline Stage Hint",
+      "fieldKey": "opportunity.stage_hint",
+      "model": "opportunity",
+      "dataType": "TEXT",
+      "locationId": "loc_example"
+    }
+  ]
+}

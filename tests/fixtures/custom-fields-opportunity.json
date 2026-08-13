@@ -1,0 +1,11 @@
+{
+  "customFields": [
+    {
+      "id": "field_opp_1",
+      "name": "Shoot Date Preference",
+      "fieldKey": "opportunity.shoot_date",
+      "model": "opportunity",
+      "dataType": "DATE"
+    }
+  ]
+}

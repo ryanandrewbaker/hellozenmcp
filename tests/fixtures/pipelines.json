@@ -1,0 +1,13 @@
+{
+  "pipelines": [
+    {
+      "id": "pipe_1",
+      "name": "Portrait Enquiries",
+      "locationId": "loc_example",
+      "stages": [
+        { "id": "stage_1", "name": "New Enquiry", "position": 0 },
+        { "id": "stage_2", "name": "Planning Call Booked", "position": 1 }
+      ]
+    }
+  ]
+}
