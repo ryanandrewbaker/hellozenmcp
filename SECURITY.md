@@ -48,6 +48,21 @@ The HelloZen credential scope `opportunities.readonly` is relatively broad at th
 - Do not expose the MCP HTTP port on a public network interface without an approved authentication layer
 - Bind to loopback (`127.0.0.1`) for initial deployment unless using a private Docker network
 
+### On-demand availability
+
+Although this connector is read-only, uses narrowly scoped credentials, binds its MCP port to loopback only, and is intended for access through OpenAI Secure MCP Tunnel, it still has visibility into private business configuration (custom fields, pipelines, calendars, workflows).
+
+**Minimise credential exposure time and service availability.** Run the connector only while an authorised operator is actively using ChatGPT to inspect HelloZen configuration. Stop it when the session ends.
+
+Docker Compose is configured with `restart: "no"` so the service does not automatically start after a host reboot, Docker daemon restart, or container exit. The normal resting state is **STOPPED**.
+
+This does not make compromise impossible. It is **defence in depth** that reduces:
+
+- credential exposure window
+- unnecessary long-lived API connectivity
+- attack surface while the service is idle
+- risk of accidental access when no operator is present
+
 ## Secret scanning
 
 This repository uses Gitleaks in CI. Do not commit secrets. Use `.env` locally and keep it out of version control.

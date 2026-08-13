@@ -78,4 +78,33 @@ describe('repository artifact security', () => {
       'COPY --from=build /app/dist ./dist',
     ]);
   });
+
+  it('keeps compose on-demand with loopback binding and hardened runtime', () => {
+    const compose = readRepoFile('compose.yml');
+
+    expect(compose).toMatch(/restart:\s*["']?no["']?/);
+    expect(compose).not.toMatch(/restart:\s*always/);
+    expect(compose).not.toMatch(/restart:\s*unless-stopped/);
+    expect(compose).toContain('127.0.0.1:8790:8790');
+    expect(compose).not.toContain('0.0.0.0:8790');
+    expect(compose).toContain('read_only: true');
+    expect(compose).toContain('cap_drop:');
+    expect(compose).toContain('no-new-privileges:true');
+    expect(compose).toContain('env_file:');
+  });
+
+  it('documents on-demand operation in README and SECURITY', () => {
+    const readme = readRepoFile('README.md');
+    const security = readRepoFile('SECURITY.md');
+
+    expect(readme.toLowerCase()).toContain('on-demand');
+    expect(readme).toMatch(/STOPPED/i);
+    expect(readme).toContain('docker compose start hellozen-mcp');
+    expect(readme).toContain('docker compose stop hellozen-mcp');
+    expect(readme).toContain('restart: "no"');
+
+    expect(security.toLowerCase()).toContain('on-demand');
+    expect(security.toLowerCase()).toContain('defence in depth');
+    expect(security).toMatch(/STOPPED/i);
+  });
 });

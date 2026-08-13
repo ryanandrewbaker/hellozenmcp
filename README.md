@@ -108,11 +108,18 @@ This command prints counts only — no credentials, raw responses, or customer i
 
 ## Docker
 
+The connector is **on-demand**. It is not designed to run continuously. See [On-demand operation](#on-demand-operation) below.
+
+Initial build and container creation (generic example):
+
 ```bash
 cp .env.example .env
-# Edit .env
-docker compose up -d --build
+# Edit .env on the deployment host only — never commit credentials
+docker build --pull -t hellozenmcp-hellozen-mcp .
+docker compose up -d --no-build hellozen-mcp
 ```
+
+On hosts where `docker compose build` works (Buildx >= 0.17.0), you may use `docker compose up -d --build` instead of the two-step build above.
 
 The default compose file binds to loopback only:
 
@@ -120,16 +127,67 @@ The default compose file binds to loopback only:
 127.0.0.1:8790:8790
 ```
 
+Docker is configured with `restart: "no"`, so a host or Docker daemon reboot does **not** automatically start the connector.
+
 For operator-specific deployment paths, copy `DEPLOYMENT.local.md.example` to `DEPLOYMENT.local.md` (gitignored).
 
-Generic example:
+## On-demand operation
+
+The MCP connector is intentionally **not** a continuously running service. Its normal resting state is **STOPPED**. Starting it requires an explicit operator action. This is a deliberate security control — see [SECURITY.md](SECURITY.md).
+
+Expected lifecycle:
+
+```text
+build/create
+    ↓
+STOPPED normally
+    ↓
+operator starts MCP
+    ↓
+health check
+    ↓
+Secure MCP Tunnel / ChatGPT session
+    ↓
+operator stops MCP
+    ↓
+STOPPED
+```
+
+### Check current state
 
 ```bash
-sudo mkdir -p /opt/hellozenmcp
-# clone repository to /opt/hellozenmcp
-cd /opt/hellozenmcp
-docker compose up -d --build
+cd /mnt/user/devconcepts/hellozenmcp
+docker compose ps
 ```
+
+### Start an existing container
+
+```bash
+docker compose start hellozen-mcp
+```
+
+### If the container has not yet been created
+
+```bash
+docker compose up -d --no-build hellozen-mcp
+```
+
+### Confirm healthy
+
+```bash
+docker compose ps
+curl -fsS http://127.0.0.1:8790/healthz && echo
+```
+
+### Stop after the ChatGPT/HelloZen session
+
+```bash
+docker compose stop hellozen-mcp
+```
+
+Use `docker compose stop` for normal shutdown. You do **not** need `docker compose down` for routine sessions — `stop` preserves the container so the next session can use `docker compose start`.
+
+After a Vision or Docker daemon reboot, the connector remains stopped until you explicitly start it again.
 
 ## OpenAI Secure MCP Tunnel (next stage)
 
@@ -171,7 +229,7 @@ Tunnel setup commands and credentials are configured separately when you deploy 
 1. Revoke the compromised Private Integration in HelloZen immediately
 2. Create a new integration with the same read-only scopes
 3. Update `.env` on the deployment host
-4. Restart the container: `docker compose up -d`
+4. Start the container when needed: `docker compose start hellozen-mcp`
 5. Run `npm run verify:hellozen` to confirm access
 6. Review container logs for unusual tool activity (logs contain event metadata only, not payloads)
 

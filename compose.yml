@@ -2,7 +2,7 @@ services:
   hellozen-mcp:
     container_name: hellozen-mcp
     build: .
-    restart: unless-stopped
+    restart: "no"
     init: true
     read_only: true
     cap_drop:

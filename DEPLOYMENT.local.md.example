@@ -1,7 +1,44 @@
 # Copy to DEPLOYMENT.local.md (gitignored) for operator-specific notes.
 # Do not commit real credentials, domains, or personal identifiers.
 
-# Example operator deployment path (customize locally):
-# /devconcepts/hellozenmcp
-
-# docker compose up -d --build
+# Vision deployment path:
+# /mnt/user/devconcepts/hellozenmcp
+#
+# Create .env on Vision only (never in Git):
+# /mnt/user/devconcepts/hellozenmcp/.env
+#
+# On-demand lifecycle:
+#
+#   build/create
+#       ↓
+#   STOPPED normally
+#       ↓
+#   operator starts MCP
+#       ↓
+#   health check
+#       ↓
+#   Secure MCP Tunnel / ChatGPT session
+#       ↓
+#   operator stops MCP
+#       ↓
+#   STOPPED
+#
+# Initial build (Vision: Buildx 0.15.1 — use docker build, not compose build):
+#
+#   cd /mnt/user/devconcepts/hellozenmcp
+#   docker build --pull -t hellozenmcp-hellozen-mcp .
+#   docker compose up -d --no-build hellozen-mcp
+#
+# Check state:
+#   docker compose ps
+#
+# Start existing container:
+#   docker compose start hellozen-mcp
+#
+# Confirm healthy:
+#   curl -fsS http://127.0.0.1:8790/healthz && echo
+#
+# Stop after session (preferred — preserves container for next start):
+#   docker compose stop hellozen-mcp
+#
+# Compose uses restart: "no" — Vision/Docker reboot does not auto-start the connector.
