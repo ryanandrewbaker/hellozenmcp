@@ -1,0 +1,19 @@
+services:
+  cloudflared:
+    # Pin deliberately — upgrade only after reviewing Cloudflare release notes.
+    image: cloudflare/cloudflared:2026.7.3
+    container_name: hellozen-mcp-cloudflared
+    restart: "no"
+    profiles:
+      - cloudflare
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - hellozen-mcp
+    networks:
+      - hellozen-mcp-net
+
+networks:
+  hellozen-mcp-net:
+    name: hellozen-mcp-net

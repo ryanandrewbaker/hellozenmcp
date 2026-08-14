@@ -14,11 +14,16 @@ import {
   listWorkflowsInputSchema,
   listWorkflowsOutputSchema,
 } from '../schemas/mcp-output.js';
+import { HELLOZEN_READ_SCOPE } from '../auth/scopes.js';
 
 const READ_ONLY_ANNOTATIONS = {
   readOnlyHint: true,
   destructiveHint: false,
   openWorldHint: false,
+} as const;
+
+const OAUTH_TOOL_META = {
+  securitySchemes: [{ type: 'oauth2', scopes: [HELLOZEN_READ_SCOPE] }],
 } as const;
 
 export const APPROVED_TOOL_NAMES = [
@@ -36,7 +41,7 @@ export function buildMcpServer(
 ): McpServer {
   const server = new McpServer({
     name: 'hellozen-mcp',
-    version: '1.0.0',
+    version: '1.1.0',
   });
 
   server.registerTool(
@@ -46,6 +51,7 @@ export function buildMcpServer(
         'Inspect HelloZen custom contact and opportunity field definitions for integration planning.',
       inputSchema: listCustomFieldsInputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
+      _meta: OAUTH_TOOL_META,
     },
     async (input) => {
       return runTool('list_custom_fields', rateLimiter, async () => {
@@ -72,6 +78,7 @@ export function buildMcpServer(
         'Inspect HelloZen opportunity pipeline and stage configuration.',
       inputSchema: listPipelinesInputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
+      _meta: OAUTH_TOOL_META,
     },
     async () => {
       return runTool('list_pipelines', rateLimiter, async () => {
@@ -97,6 +104,7 @@ export function buildMcpServer(
         'Inspect HelloZen calendar configuration such as a portrait planning call calendar.',
       inputSchema: listCalendarsInputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
+      _meta: OAUTH_TOOL_META,
     },
     async () => {
       return runTool('list_calendars', rateLimiter, async () => {
@@ -122,6 +130,7 @@ export function buildMcpServer(
         'List HelloZen workflow IDs, names, and status for delivery and nurture flows.',
       inputSchema: listWorkflowsInputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
+      _meta: OAUTH_TOOL_META,
     },
     async () => {
       return runTool('list_workflows', rateLimiter, async () => {
