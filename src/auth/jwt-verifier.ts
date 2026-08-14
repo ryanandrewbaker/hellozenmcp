@@ -1,6 +1,7 @@
 import {
   createLocalJWKSet,
   createRemoteJWKSet,
+  decodeProtectedHeader,
   jwtVerify,
   type JWTVerifyGetKey,
 } from 'jose';
@@ -21,6 +22,13 @@ const ALLOWED_ALGORITHMS = [
   'PS384',
   'PS512',
 ] as const;
+
+const ACCESS_TOKEN_HEADER_TYPES = new Set([
+  'at+jwt',
+  'application/at+jwt',
+  'jwt',
+  'JWT',
+]);
 
 export type JwtVerifierOptions = {
   issuer: string;
@@ -52,10 +60,49 @@ function mapVerificationError(error: unknown): string {
   return 'Invalid access token';
 }
 
-function assertAccessTokenClaims(payload: Record<string, unknown>): void {
-  if (payload.typ === 'ID' || payload.token_use === 'id') {
-    throw new InvalidTokenError('ID token cannot be used as access token');
+function normalizeResourceIdentifier(value: string): string {
+  const url = new URL(value);
+  url.hash = '';
+  url.search = '';
+  return url.href;
+}
+
+function resourceClaimMatches(
+  claim: unknown,
+  expectedResource: URL,
+): boolean {
+  const expected = normalizeResourceIdentifier(expectedResource.href);
+  const values = Array.isArray(claim) ? claim : [claim];
+
+  return values.some((value) => {
+    if (typeof value !== 'string') {
+      return false;
+    }
+    return normalizeResourceIdentifier(value) === expected;
+  });
+}
+
+/**
+ * Validates JWT protected-header `typ` when present.
+ *
+ * RFC 9068 access tokens use `at+jwt`. Legacy access tokens may use `JWT` or omit
+ * `typ` entirely. A `typ` value alone cannot prove a token is an access token —
+ * OIDC ID tokens also commonly use `JWT`. We therefore do not reject solely on
+ * `typ: JWT`, and we do not attempt universal ID-token detection here.
+ */
+function assertAccessTokenHeaderType(token: string): void {
+  const header = decodeProtectedHeader(token);
+  const typ = header.typ;
+
+  if (typ === undefined) {
+    return;
   }
+
+  if (ACCESS_TOKEN_HEADER_TYPES.has(typ)) {
+    return;
+  }
+
+  throw new InvalidTokenError(`Unsupported token type: ${typ}`);
 }
 
 function resolveClientId(payload: Record<string, unknown>): string {
@@ -77,32 +124,19 @@ export class JwtAccessTokenVerifier implements OAuthTokenVerifier {
       throw new InvalidTokenError('Malformed bearer token');
     }
 
+    assertAccessTokenHeaderType(token);
+
     try {
       const { payload } = await jwtVerify(token, this.options.jwks, {
         issuer: this.options.issuer,
         audience: this.options.audience,
         algorithms: [...ALLOWED_ALGORITHMS],
-        typ: 'JWT',
       });
 
       const claims = payload as Record<string, unknown>;
-      assertAccessTokenClaims(claims);
 
-      if (this.options.expectedResource) {
-        const resourceClaim = claims.resource ?? claims.aud;
-        const expected = this.options.expectedResource.href.replace(/\/$/, '');
-        const resources = Array.isArray(resourceClaim)
-          ? resourceClaim
-          : [resourceClaim];
-
-        const matches = resources.some((value) => {
-          if (typeof value !== 'string') {
-            return false;
-          }
-          return value.replace(/\/$/, '') === expected;
-        });
-
-        if (!matches) {
+      if (this.options.expectedResource && claims.resource !== undefined) {
+        if (!resourceClaimMatches(claims.resource, this.options.expectedResource)) {
           log({
             event: 'auth_failure',
             success: false,

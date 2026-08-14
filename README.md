@@ -92,7 +92,8 @@ Version 1.0 supported unauthenticated LAN Cursor access and no-auth ChatGPT tunn
 - Responses are normalized and data-minimized; logs are sanitized (no bearer tokens or Authorization headers)
 - Rate limits, concurrency limits, and response size caps are enforced
 - There are **no HelloZen write tools**
-- OAuth is fail-closed: invalid/missing auth config prevents startup when auth is enabled
+- OAuth is fail-closed: missing/invalid OAuth configuration prevents startup
+- No runtime environment flag to disable OAuth on `/mcp`
 - Cloudflare Tunnel provides transport only — not application authentication
 - No LAN auth bypass, no Cloudflare Access double-auth
 
@@ -300,10 +301,12 @@ Example `.cursor/mcp.json` (use environment variables for credentials — never 
 }
 ```
 
-Register redirect URIs on your authorization server per current Cursor docs:
+Register redirect URIs on your authorization server per [Cursor's official MCP OAuth documentation](https://cursor.com/docs/mcp.md):
 
-- Desktop: `http://localhost:8787/callback`
-- Cursor web/agents: `https://www.cursor.com/agents/mcp/oauth/callback`
+| Surface | Redirect URI |
+|---------|--------------|
+| Cursor Desktop | `http://localhost:8787/callback` |
+| Cursor web / Cursor Agents | `https://www.cursor.com/agents/mcp/oauth/callback` |
 
 Full setup: [docs/oauth-and-deployment.md](docs/oauth-and-deployment.md)
 

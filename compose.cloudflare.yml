@@ -1,6 +1,7 @@
 services:
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    # Pin deliberately — upgrade only after reviewing Cloudflare release notes.
+    image: cloudflare/cloudflared:2026.7.3
     container_name: hellozen-mcp-cloudflared
     restart: "no"
     profiles:

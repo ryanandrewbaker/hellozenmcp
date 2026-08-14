@@ -21,7 +21,6 @@ const server = app.listen(config.port, config.bindHost, () => {
     `${JSON.stringify({
       event: 'server_started',
       success: true,
-      auth_enabled: auth.enabled,
     })}\n`,
   );
 });

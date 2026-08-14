@@ -81,6 +81,12 @@ From `@modelcontextprotocol/sdk@1.30.0`:
 
 JWT validation uses [`jose`](https://github.com/panva/jose) with remote or local JWKS.
 
+Access tokens are validated by signature, exact issuer (as returned by discovery metadata), audience, expiry, scope, and optional RFC 8707 `resource` claim. Header `typ` values such as `at+jwt` (RFC 9068) are accepted. A `typ` of `JWT` alone does not prove a token is an access token — OIDC ID tokens commonly use `JWT` — so universal ID-token detection is not attempted at the resource server.
+
+Authorization Server discovery follows RFC 8414 / OIDC Discovery path-aware rules, including issuers with path components. Discovery metadata is forwarded without inventing unsupported capabilities. Required capabilities (authorization code + PKCE S256) must be explicitly advertised or startup fails.
+
+There is **no runtime environment flag** to disable OAuth on `/mcp`. Unit tests inject disabled auth directly.
+
 ### Tool metadata note
 
 SDK 1.30 exposes tool OAuth requirements via `registerTool` `_meta.securitySchemes`. OpenAI's current documentation shows top-level `securitySchemes` in newer SDK examples. Runtime enforcement happens at the HTTP layer via `requireBearerAuth`; tool metadata is advisory for clients such as ChatGPT.
@@ -111,9 +117,11 @@ HELLOZEN_MCP_REQUIRED_SCOPE=hellozen.read
 
 On startup the MCP server:
 
-1. fetches `/.well-known/openid-configuration` (then `/.well-known/oauth-authorization-server` as fallback)
-2. validates issuer, endpoints, and JWKS URI
-3. fails closed if OAuth is enabled but discovery/validation fails
+1. constructs RFC 8414 / OIDC Discovery URLs (including path-aware issuers)
+2. fetches authorization server metadata from the configured issuer
+3. uses the metadata `issuer` value exactly as the canonical JWT `iss` validator
+4. validates required capabilities (authorization code + PKCE S256) are advertised
+5. fails closed if discovery, issuer correspondence, JWKS trust, or capability validation fails
 
 ### Client registration strategy (v1.1)
 
@@ -126,10 +134,14 @@ Use **predefined/static OAuth clients** (not DCR/CIMD as a hard requirement):
 
 Register redirect URIs from current official documentation:
 
-**Cursor (2026 docs)**
+**Cursor** ([official MCP OAuth docs](https://cursor.com/docs/mcp.md)) uses fixed redirect URLs. Register both if users authenticate from desktop and web:
 
-- Desktop: `http://localhost:8787/callback` (any localhost port may work; `/callback` path is standard)
-- Cursor web/agents: `https://www.cursor.com/agents/mcp/oauth/callback`
+| Surface | Redirect URI |
+|---------|--------------|
+| Cursor Desktop | `http://localhost:8787/callback` |
+| Cursor web / Cursor Agents | `https://www.cursor.com/agents/mcp/oauth/callback` |
+
+Do not substitute arbitrary localhost ports unless Cursor documentation changes.
 
 **ChatGPT**
 
@@ -145,14 +157,14 @@ See [.env.example](../.env.example). Key values:
 
 | Variable | Purpose |
 |----------|---------|
-| `HELLOZEN_MCP_AUTH_ENABLED` | `true` in production (default) |
-| `HELLOZEN_MCP_ALLOW_AUTH_DISABLED` | Second gate; required with `AUTH_ENABLED=false` (tests/dev only) |
-| `HELLOZEN_MCP_RESOURCE_URL` | Canonical MCP resource identity |
-| `HELLOZEN_MCP_OAUTH_ISSUER` | External authorization server issuer |
+| `HELLOZEN_MCP_RESOURCE_URL` | Canonical MCP resource identity (required) |
+| `HELLOZEN_MCP_OAUTH_ISSUER` | External authorization server issuer (required) |
 | `HELLOZEN_MCP_OAUTH_AUDIENCE` | Token audience (defaults to resource URL) |
 | `HELLOZEN_MCP_REQUIRED_SCOPE` | `hellozen.read` |
 | `HELLOZEN_MCP_OAUTH_JWKS_URI` | Optional override if discovery omits `jwks_uri` |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Remotely managed tunnel token (never commit) |
+
+OAuth cannot be disabled via environment variables in the production server.
 
 ## Docker deployment
 
@@ -174,7 +186,7 @@ Loopback binding `127.0.0.1:8790:8790` is preserved for OpenAI tunnel-client rea
 docker compose -f compose.yml -f compose.cloudflare.yml --profile cloudflare up -d
 ```
 
-`cloudflared` connects over the private Docker network `hellozen-mcp-net` to `http://hellozen-mcp:8790`. No router port-forward or Cloudflare Access policies.
+`cloudflared` (`cloudflare/cloudflared:2026.7.3`, pinned deliberately) connects over the private Docker network `hellozen-mcp-net` to `http://hellozen-mcp:8790`. Upgrade the pinned image only after reviewing Cloudflare release notes.
 
 **Do not** publish the Cloudflare hostname until OAuth is verified locally.
 

@@ -3,7 +3,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { ReadOnlyHelloZenClient } from '../../src/hellozen/client.js';
 import { createApp } from '../../src/http/app.js';
 import {
-  createDisabledTestAuth,
   createEnabledTestAuth,
   createTestAccessToken,
   initOAuthTestKeys,
@@ -24,13 +23,6 @@ describe('OAuth resource server', () => {
   });
 
   let protectedApp: ReturnType<typeof createApp>;
-  const openApp = createApp({
-    client: new ReadOnlyHelloZenClient({
-      ...TEST_CONFIG,
-      fetchImpl: createFakeFetch(),
-    }),
-    auth: createDisabledTestAuth(),
-  });
 
   beforeAll(async () => {
     protectedApp = createApp({
@@ -83,7 +75,7 @@ describe('OAuth resource server', () => {
 
   it('rejects tokens with wrong issuer', async () => {
     const token = await createTestAccessToken({
-      issuer: 'https://evil.example',
+      issuer: 'https://evil.example/',
     });
     const response = await request(protectedApp)
       .post('/mcp')
@@ -121,13 +113,25 @@ describe('OAuth resource server', () => {
     expect(response.status).toBe(401);
   });
 
-  it('rejects ID tokens presented as access tokens', async () => {
-    const token = await createTestAccessToken({ tokenUse: 'id' });
+  it('accepts access tokens with typ at+jwt', async () => {
+    const token = await createTestAccessToken({ typ: 'at+jwt' });
     const response = await request(protectedApp)
       .post('/mcp')
       .set('Authorization', `Bearer ${token}`)
-      .send({});
-    expect(response.status).toBe(401);
+      .set('Accept', 'application/json, text/event-stream')
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: { name: 'test', version: '1.1.0' },
+        },
+      });
+
+    expect(response.status).not.toBe(401);
+    expect(response.status).not.toBe(403);
   });
 
   it('returns 403 when hellozen.read scope is missing', async () => {
@@ -156,7 +160,7 @@ describe('OAuth resource server', () => {
         params: {
           protocolVersion: '2024-11-05',
           capabilities: {},
-          clientInfo: { name: 'test', version: '1.0.0' },
+          clientInfo: { name: 'test', version: '1.1.0' },
         },
       });
 
@@ -164,7 +168,9 @@ describe('OAuth resource server', () => {
     expect(response.status).not.toBe(403);
   });
 
-  it('does not call HelloZen API on authentication failure', async () => {
+  async function expectNoUpstreamCalls(
+    tokenFactory: () => Promise<string | undefined>,
+  ): Promise<void> {
     let upstreamCalls = 0;
     const spyClient = new ReadOnlyHelloZenClient({
       ...TEST_CONFIG,
@@ -178,8 +184,36 @@ describe('OAuth resource server', () => {
       client: spyClient,
       auth: await createEnabledTestAuth(),
     });
-    await request(app).post('/mcp').send({});
+
+    const token = await tokenFactory();
+    const requestBuilder = request(app).post('/mcp');
+    if (token) {
+      requestBuilder.set('Authorization', `Bearer ${token}`);
+    }
+    await requestBuilder.send({});
     expect(upstreamCalls).toBe(0);
+  }
+
+  it('does not call HelloZen API without Authorization header', async () => {
+    await expectNoUpstreamCalls(async () => undefined);
+  });
+
+  it('does not call HelloZen API for invalid signatures', async () => {
+    await expectNoUpstreamCalls(async () =>
+      createTestAccessToken({ wrongKey: true }),
+    );
+  });
+
+  it('does not call HelloZen API for wrong audience', async () => {
+    await expectNoUpstreamCalls(async () =>
+      createTestAccessToken({ audience: 'https://other.example/mcp' }),
+    );
+  });
+
+  it('does not call HelloZen API for missing scope', async () => {
+    await expectNoUpstreamCalls(async () =>
+      createTestAccessToken({ scope: 'other.scope' }),
+    );
   });
 
   it('exposes protected resource metadata without authentication', async () => {
@@ -194,7 +228,7 @@ describe('OAuth resource server', () => {
     expect(JSON.stringify(response.body)).not.toContain(TEST_CONFIG.readonlyToken);
   });
 
-  it('exposes authorization server metadata mirror without authentication', async () => {
+  it('exposes authorization server metadata without fabricated capabilities', async () => {
     const response = await request(protectedApp).get(
       '/.well-known/oauth-authorization-server',
     );
@@ -203,6 +237,8 @@ describe('OAuth resource server', () => {
     expect(response.body.issuer).toBe(TEST_ISSUER);
     expect(response.body.authorization_endpoint).toContain('/authorize');
     expect(response.body.token_endpoint).toContain('/token');
+    expect(response.body.code_challenge_methods_supported).toEqual(['S256']);
+    expect(response.body.response_types_supported).toEqual(['code']);
     expect(response.body).not.toHaveProperty('client_secret');
     expect(response.body).not.toHaveProperty('client_id');
   });
@@ -214,24 +250,5 @@ describe('OAuth resource server', () => {
       status: 'ok',
       service: 'hellozen-mcp',
     });
-  });
-
-  it('allows MCP access when auth is explicitly disabled for tests', async () => {
-    const response = await request(openApp)
-      .post('/mcp')
-      .set('Accept', 'application/json, text/event-stream')
-      .send({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2024-11-05',
-          capabilities: {},
-          clientInfo: { name: 'test', version: '1.0.0' },
-        },
-      });
-
-    expect(response.status).not.toBe(401);
-    expect(response.status).not.toBe(403);
   });
 });

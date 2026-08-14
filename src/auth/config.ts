@@ -1,10 +1,14 @@
 import { z } from 'zod';
 import type { OAuthMetadata } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/provider.js';
+import { validateRequiredAuthorizationServerCapabilities } from './capabilities.js';
 import {
+  canonicalIssuerFromMetadata,
+  configuredIssuerUrl,
   fetchAuthorizationServerMetadata,
   type AuthorizationServerMetadata,
 } from './discovery.js';
+import { assertJwksUriTrusted, stripUrlQueryAndFragment } from './issuer.js';
 import { createRemoteJwtVerifier } from './jwt-verifier.js';
 
 const httpsUrlSchema = z
@@ -23,19 +27,14 @@ const httpsUrlSchema = z
   );
 
 const authEnvSchema = z.object({
-  HELLOZEN_MCP_AUTH_ENABLED: z
-    .enum(['true', 'false'])
-    .default('true'),
-  HELLOZEN_MCP_ALLOW_AUTH_DISABLED: z
-    .enum(['true', 'false'])
-    .default('false'),
-  HELLOZEN_MCP_RESOURCE_URL: httpsUrlSchema.optional(),
-  HELLOZEN_MCP_OAUTH_ISSUER: httpsUrlSchema.optional(),
+  HELLOZEN_MCP_RESOURCE_URL: httpsUrlSchema,
+  HELLOZEN_MCP_OAUTH_ISSUER: httpsUrlSchema,
   HELLOZEN_MCP_OAUTH_AUDIENCE: httpsUrlSchema.optional(),
   HELLOZEN_MCP_REQUIRED_SCOPE: z.string().min(1).default('hellozen.read'),
   HELLOZEN_MCP_OAUTH_JWKS_URI: httpsUrlSchema.optional(),
 });
 
+/** Test-only: injected by unit tests to bypass OAuth. Not available via environment. */
 export type DisabledAuthConfig = {
   enabled: false;
 };
@@ -44,6 +43,7 @@ export type EnabledAuthConfig = {
   enabled: true;
   resourceUrl: URL;
   issuer: URL;
+  canonicalIssuer: string;
   audience: string;
   requiredScope: string;
   scopesSupported: string[];
@@ -52,23 +52,9 @@ export type EnabledAuthConfig = {
   resourceMetadataUrl: string;
 };
 
-export type AuthConfig = DisabledAuthConfig | EnabledAuthConfig;
+export type AuthConfig = EnabledAuthConfig;
 
-export type AppAuthOptions = AuthConfig;
-
-function normalizeIssuerUrl(value: string): URL {
-  const url = new URL(value);
-  url.hash = '';
-  url.search = '';
-  return url;
-}
-
-function normalizeResourceUrl(value: string): URL {
-  const url = new URL(value);
-  url.hash = '';
-  url.search = '';
-  return url;
-}
+export type AppAuthOptions = AuthConfig | DisabledAuthConfig;
 
 function toOAuthMetadata(
   metadata: AuthorizationServerMetadata,
@@ -79,6 +65,8 @@ function toOAuthMetadata(
     );
   }
 
+  validateRequiredAuthorizationServerCapabilities(metadata);
+
   return {
     issuer: metadata.issuer,
     authorization_endpoint: metadata.authorization_endpoint,
@@ -86,18 +74,11 @@ function toOAuthMetadata(
     jwks_uri: metadata.jwks_uri,
     registration_endpoint: metadata.registration_endpoint,
     revocation_endpoint: metadata.revocation_endpoint,
-    response_types_supported: metadata.response_types_supported ?? ['code'],
-    code_challenge_methods_supported:
-      metadata.code_challenge_methods_supported ?? ['S256'],
-    grant_types_supported: metadata.grant_types_supported ?? [
-      'authorization_code',
-      'refresh_token',
-    ],
+    response_types_supported: metadata.response_types_supported,
+    code_challenge_methods_supported: metadata.code_challenge_methods_supported,
+    grant_types_supported: metadata.grant_types_supported,
     token_endpoint_auth_methods_supported:
-      metadata.token_endpoint_auth_methods_supported ?? [
-        'client_secret_post',
-        'none',
-      ],
+      metadata.token_endpoint_auth_methods_supported,
     scopes_supported: metadata.scopes_supported,
     service_documentation: metadata.service_documentation,
   };
@@ -126,36 +107,20 @@ export async function loadAuthConfig(
     throw new Error(`Invalid OAuth environment configuration: ${message}`);
   }
 
-  const authEnabled = parsed.data.HELLOZEN_MCP_AUTH_ENABLED === 'true';
-
-  if (!authEnabled) {
-    if (parsed.data.HELLOZEN_MCP_ALLOW_AUTH_DISABLED !== 'true') {
-      throw new Error(
-        'HELLOZEN_MCP_AUTH_ENABLED=false requires HELLOZEN_MCP_ALLOW_AUTH_DISABLED=true',
-      );
-    }
-
-    return { enabled: false };
-  }
-
-  const resourceUrlValue = parsed.data.HELLOZEN_MCP_RESOURCE_URL;
-  const issuerValue = parsed.data.HELLOZEN_MCP_OAUTH_ISSUER;
-
-  if (!resourceUrlValue || !issuerValue) {
-    throw new Error(
-      'OAuth is enabled but HELLOZEN_MCP_RESOURCE_URL and HELLOZEN_MCP_OAUTH_ISSUER are required',
-    );
-  }
-
-  const resourceUrl = normalizeResourceUrl(resourceUrlValue);
-  const issuer = normalizeIssuerUrl(issuerValue);
+  const resourceUrl = stripUrlQueryAndFragment(parsed.data.HELLOZEN_MCP_RESOURCE_URL);
+  const configuredIssuer = configuredIssuerUrl(parsed.data.HELLOZEN_MCP_OAUTH_ISSUER);
   const audience =
     parsed.data.HELLOZEN_MCP_OAUTH_AUDIENCE ?? resourceUrl.href;
   const requiredScope = parsed.data.HELLOZEN_MCP_REQUIRED_SCOPE;
 
-  const metadata = await fetchAuthorizationServerMetadata(issuer, fetchImpl);
+  const metadata = await fetchAuthorizationServerMetadata(
+    configuredIssuer,
+    fetchImpl,
+  );
+  const canonicalIssuer = canonicalIssuerFromMetadata(metadata);
   const oauthMetadata = toOAuthMetadata(metadata);
 
+  const jwksOverride = parsed.data.HELLOZEN_MCP_OAUTH_JWKS_URI !== undefined;
   const jwksUri = parsed.data.HELLOZEN_MCP_OAUTH_JWKS_URI
     ? new URL(parsed.data.HELLOZEN_MCP_OAUTH_JWKS_URI)
     : metadata.jwks_uri
@@ -168,8 +133,10 @@ export async function loadAuthConfig(
     );
   }
 
+  assertJwksUriTrusted(jwksUri, configuredIssuer, jwksOverride);
+
   const verifier = createRemoteJwtVerifier({
-    issuer: issuer.href.replace(/\/$/, ''),
+    issuer: canonicalIssuer,
     audience,
     expectedResource: resourceUrl,
     jwksUri,
@@ -182,7 +149,8 @@ export async function loadAuthConfig(
   return {
     enabled: true,
     resourceUrl,
-    issuer,
+    issuer: configuredIssuer,
+    canonicalIssuer,
     audience,
     requiredScope,
     scopesSupported: buildScopesSupported(metadata, requiredScope),

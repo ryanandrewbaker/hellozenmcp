@@ -1,48 +1,83 @@
 import type { OAuthMetadata } from '@modelcontextprotocol/sdk/shared/auth.js';
+import {
+  assertHttpsOrLocalhost,
+  buildAuthorizationServerDiscoveryCandidates,
+  issuersCorrespond,
+  stripUrlQueryAndFragment,
+} from './issuer.js';
 
 export type AuthorizationServerMetadata = OAuthMetadata & {
   jwks_uri?: string;
 };
 
-function joinIssuerPath(issuer: URL, path: string): URL {
-  const normalizedIssuer = issuer.href.endsWith('/')
-    ? issuer.href
-    : `${issuer.href}/`;
-  return new URL(path.replace(/^\//, ''), normalizedIssuer);
+const MAX_REDIRECTS = 3;
+
+async function fetchJson(
+  url: URL,
+  fetchImpl: typeof fetch,
+  redirectCount = 0,
+): Promise<unknown> {
+  if (redirectCount > MAX_REDIRECTS) {
+    throw new Error(`Too many redirects while fetching ${url.href}`);
+  }
+
+  assertHttpsOrLocalhost(url, 'Discovery URL');
+
+  const response = await fetchImpl(url, {
+    headers: { Accept: 'application/json' },
+    redirect: 'manual',
+  });
+
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get('location');
+    if (!location) {
+      throw new Error(`Redirect without Location header from ${url.href}`);
+    }
+
+    const redirectUrl = new URL(location, url);
+    if (redirectUrl.origin !== url.origin) {
+      throw new Error(
+        `Discovery redirect to unrelated host rejected: ${redirectUrl.origin}`,
+      );
+    }
+
+    return fetchJson(redirectUrl, fetchImpl, redirectCount + 1);
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Authorization server discovery failed (${response.status}) at ${url.href}`,
+    );
+  }
+
+  return response.json();
 }
 
 export async function fetchAuthorizationServerMetadata(
-  issuer: URL,
+  configuredIssuer: URL,
   fetchImpl: typeof fetch = fetch,
 ): Promise<AuthorizationServerMetadata> {
-  const discoveryUrls = [
-    joinIssuerPath(issuer, '.well-known/openid-configuration'),
-    joinIssuerPath(issuer, '.well-known/oauth-authorization-server'),
-  ];
+  const discoveryUrls = buildAuthorizationServerDiscoveryCandidates(
+    configuredIssuer,
+  );
 
   let lastError: unknown;
 
   for (const discoveryUrl of discoveryUrls) {
     try {
-      const response = await fetchImpl(discoveryUrl, {
-        headers: { Accept: 'application/json' },
-      });
-
-      if (!response.ok) {
-        lastError = new Error(
-          `Authorization server discovery failed (${response.status}) at ${discoveryUrl.href}`,
-        );
-        continue;
-      }
-
-      const metadata = (await response.json()) as AuthorizationServerMetadata;
+      const metadata = (await fetchJson(
+        discoveryUrl,
+        fetchImpl,
+      )) as AuthorizationServerMetadata;
 
       if (!metadata.issuer) {
         throw new Error('Authorization server metadata is missing issuer');
       }
 
-      if (metadata.issuer !== issuer.href && metadata.issuer !== issuer.href.replace(/\/$/, '')) {
-        throw new Error('Authorization server metadata issuer does not match configured issuer');
+      if (!issuersCorrespond(configuredIssuer.href, metadata.issuer)) {
+        throw new Error(
+          'Authorization server metadata issuer does not correspond to configured issuer',
+        );
       }
 
       return metadata;
@@ -54,4 +89,14 @@ export async function fetchAuthorizationServerMetadata(
   throw lastError instanceof Error
     ? lastError
     : new Error('Authorization server discovery failed');
+}
+
+export function canonicalIssuerFromMetadata(
+  metadata: AuthorizationServerMetadata,
+): string {
+  return metadata.issuer;
+}
+
+export function configuredIssuerUrl(value: string): URL {
+  return stripUrlQueryAndFragment(value);
 }

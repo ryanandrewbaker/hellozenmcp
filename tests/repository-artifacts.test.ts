@@ -54,9 +54,10 @@ describe('repository artifact security', () => {
   it('keeps .env.example versioned and present', () => {
     const envExample = readRepoFile('.env.example');
     expect(envExample).toContain('HELLOZEN_MCP_READONLY_TOKEN=');
-    expect(envExample).toContain('HELLOZEN_MCP_AUTH_ENABLED=');
     expect(envExample).toContain('HELLOZEN_MCP_RESOURCE_URL=');
     expect(envExample).toContain('HELLOZEN_MCP_OAUTH_ISSUER=');
+    expect(envExample).not.toContain('HELLOZEN_MCP_AUTH_ENABLED');
+    expect(envExample).not.toContain('HELLOZEN_MCP_ALLOW_AUTH_DISABLED');
     expect(envExample).not.toMatch(/pit-[a-z0-9-]+/i);
   });
 
@@ -80,6 +81,12 @@ describe('repository artifact security', () => {
       'COPY package.json package-lock.json ./',
       'COPY --from=build /app/dist ./dist',
     ]);
+  });
+
+  it('keeps compose cloudflared image pinned', () => {
+    const compose = readRepoFile('compose.cloudflare.yml');
+    expect(compose).toContain('cloudflare/cloudflared:2026.7.3');
+    expect(compose).not.toContain('cloudflared:latest');
   });
 
   it('keeps compose on-demand with loopback binding and hardened runtime', () => {

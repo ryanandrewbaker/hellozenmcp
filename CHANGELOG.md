@@ -32,6 +32,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - No auth bypass by network path (LAN, Cloudflare, or OpenAI tunnel)
 - No Cloudflare Access — single OAuth authorization model
 - `HELLOZEN_MCP_READONLY_TOKEN` remains server-side only
+- No runtime OAuth disable via environment variables
+- Canonical issuer from discovery metadata used exactly for JWT `iss` validation
+- Authorization Server capabilities are not fabricated in metadata responses
+- Path-aware RFC 8414 / OIDC discovery for issuers with path components
+- `cloudflared` image pinned to `2026.7.3`
 
 ## [1.0.0] - 2026-08-14
 
