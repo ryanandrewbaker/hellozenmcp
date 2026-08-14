@@ -1,8 +1,10 @@
 # HelloZen Read-Only MCP
 
+**HelloZen MCP 1.0** — first stable baseline release. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
 An unofficial, self-hosted, strictly read-only MCP connector designed for inspecting HelloZen configuration.
 
-Use this connector with ChatGPT (via OpenAI Secure MCP Tunnel) or MCP Inspector to review custom fields, pipelines, calendars, and workflows when planning integrations for a photography studio on HelloZen — without exposing contact data or write access.
+Use this connector with **Cursor** (trusted LAN), **ChatGPT** (via OpenAI Secure MCP Tunnel), or MCP Inspector to review custom fields, pipelines, calendars, and workflows when planning integrations for a photography studio on HelloZen — without exposing contact data or write access.
 
 > **Disclaimer:** This project is unofficial and is not affiliated with, endorsed by, or supported by HelloZen unless explicitly approved by the HelloZen owner. Do not use HelloZen logos or imply official partnership.
 
@@ -10,21 +12,86 @@ Use this connector with ChatGPT (via OpenAI Secure MCP Tunnel) or MCP Inspector 
 
 ## What it does
 
+A small read-only Model Context Protocol server that exposes selected HelloZen / LeadConnector **configuration** data to trusted AI clients. The HelloZen Private Integration token remains on the server; MCP clients never receive it.
+
 Exposes exactly four MCP tools:
 
-| Tool | Purpose |
+| Tool | Returns |
 |------|---------|
-| `list_custom_fields` | Custom contact and opportunity field definitions |
-| `list_pipelines` | Pipeline and stage configuration |
-| `list_calendars` | Calendar configuration (e.g. portrait planning call setup) |
-| `list_workflows` | Workflow IDs, names, and status |
+| `list_custom_fields` | Field definitions (`id`, `name`, `fieldKey`, `model`, `dataType`, `picklistOptions`) for contact and/or opportunity models — not field values stored on records |
+| `list_pipelines` | Pipeline names and stage configuration (`id`, `name`, `position`) — not opportunity records |
+| `list_calendars` | Calendar configuration metadata (`id`, `name`, `description`, `duration`, `status`, `timezone`, `groupId`) — not appointments or availability |
+| `list_workflows` | Workflow IDs, names, and status — not enrolments, execution history, or step content |
 
 It does **not** access contacts, conversations, appointments, opportunity records, emails, form submissions, calendar events, or workflow enrolments.
+
+## Architecture
+
+```text
+MCP client
+     ↓
+Streamable HTTP (/mcp)
+     ↓
+Express + MCP server
+     ↓
+Read-only MCP tools (×4)
+     ↓
+ReadOnlyHelloZenClient
+     ↓
+GET-only transport
+     ↓
+LeadConnector / HelloZen API
+```
+
+### v1.0 client paths
+
+Version 1.0 supports two proven connection patterns:
+
+**Cursor — direct LAN HTTP**
+
+```text
+Cursor (trusted LAN)
+   ↓
+http://<host-lan-ip>:8790/mcp
+   ↓
+hellozen-mcp
+```
+
+**ChatGPT — OpenAI Secure MCP Tunnel**
+
+```text
+ChatGPT
+   ↓
+OpenAI Secure MCP Tunnel
+   ↓
+tunnel-client (on private host)
+   ↓
+http://<reachable-mcp-address>:8790/mcp
+   ↓
+hellozen-mcp
+```
+
+v1.0 does **not** provide a general authenticated public MCP endpoint. Future work may add Cloudflare Tunnel and OAuth 2.1 for a canonical HTTPS endpoint — see [docs/BACKLOG.md](docs/BACKLOG.md). That is **not** part of v1.0.
+
+## Security model (v1.0)
+
+- HelloZen API access is **read-only** (four fixed `GET` endpoints only)
+- The HelloZen Private Integration token is **server-side only** — never supply it to MCP clients, ChatGPT, or Cursor
+- Secrets live in `.env` on the deployment host; `.env` is gitignored and must never be committed
+- Responses are normalized and data-minimized; logs are sanitized
+- Rate limits, concurrency limits, and response size caps are enforced
+- There are **no HelloZen write tools**
+- v1.0 assumes **trusted network or tunnel access** to the MCP HTTP endpoint
+- v1.0 does **not** implement OAuth for arbitrary external MCP clients
+- The LAN HTTP endpoint is **not** suitable for public Internet exposure
+
+For on-demand availability and defence-in-depth rationale, see [SECURITY.md](SECURITY.md).
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
+| [CHANGELOG.md](CHANGELOG.md) | Release history (v1.0.0 baseline) |
 | [docs/connecting-to-chatgpt.md](docs/connecting-to-chatgpt.md) | Field guide: private MCP → Secure MCP Tunnel → ChatGPT (full setup and operations) |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Planned improvements |
 | [SECURITY.md](SECURITY.md) | Security policy and on-demand availability rationale |
@@ -197,6 +264,121 @@ docker compose stop hellozen-mcp
 Use `docker compose stop` for normal shutdown. You do **not** need `docker compose down` for routine sessions — `stop` preserves the container so the next session can use `docker compose start`.
 
 After a Vision or Docker daemon reboot, the connector remains stopped until you explicitly start it again.
+
+## Cursor setup (v1.0)
+
+Cursor can connect directly to the MCP over Streamable HTTP on a **trusted LAN**.
+
+Add a server entry to your Cursor MCP configuration (for example `~/.cursor/mcp.json` or project `.cursor/mcp.json`). Use the **URL** transport — no authentication headers are required in v1.0:
+
+```json
+{
+  "mcpServers": {
+    "hellozen": {
+      "url": "http://192.168.50.234:8790/mcp"
+    }
+  }
+}
+```
+
+Replace `192.168.50.234` with the LAN address of the host running `hellozen-mcp`. That address is **deployment-specific** — it is shown here only as the current Vision host example, not as a portable default.
+
+Before relying on Cursor:
+
+1. Start the MCP container: `docker compose start hellozen-mcp`
+2. Confirm health from a machine that can reach the host:
+
+```bash
+curl -fsS http://<host-lan-ip>:8790/healthz && echo
+```
+
+Cursor direct access requires Docker (or the Node process) to publish port `8790` on an interface reachable from your workstation — see [Docker networking](#docker-networking-v10).
+
+## ChatGPT setup (v1.0)
+
+ChatGPT connects through the **OpenAI Secure MCP Tunnel**. High-level operator sequence:
+
+```text
+1. Start hellozen-mcp
+2. Verify MCP health (/healthz)
+3. Start the OpenAI tunnel-client on the Vision host
+4. Point the tunnel upstream at an MCP address reachable from that host
+5. Verify tunnel readiness (/readyz on the tunnel health port)
+6. Configure the ChatGPT custom MCP app (Tunnel connection, no authentication)
+```
+
+**Full setup guide:** [docs/connecting-to-chatgpt.md](docs/connecting-to-chatgpt.md)
+
+Useful verification commands (replace addresses as appropriate):
+
+```bash
+docker compose ps
+curl -fsS http://<reachable-mcp-address>:8790/healthz && echo
+curl -fsS http://127.0.0.1:8791/readyz && echo
+```
+
+The tunnel upstream URL must match an address where the MCP is **actually listening**. A healthy Docker container does not guarantee ChatGPT connectivity if the tunnel points at the wrong interface — see [Troubleshooting](#troubleshooting).
+
+## Docker networking (v1.0)
+
+The committed `compose.yml` binds the MCP port to **loopback only**:
+
+```yaml
+ports:
+  - "127.0.0.1:8790:8790"
+```
+
+This is appropriate when:
+
+- only the host-local `tunnel-client` reaches the MCP at `http://127.0.0.1:8790/mcp`, and
+- Cursor is not used from another machine on the LAN
+
+For **Cursor LAN access**, the operator may change the binding to publish on the host LAN address, for example:
+
+```yaml
+ports:
+  - "192.168.50.234:8790:8790"
+```
+
+When that is done, the OpenAI tunnel upstream must use an address that reaches **that** listener — for example `http://192.168.50.234:8790/mcp` — not `http://127.0.0.1:8790/mcp` unless the tunnel process shares the same network namespace as the listener.
+
+| Binding | Cursor from LAN | Tunnel upstream `127.0.0.1:8790` |
+|---------|-----------------|-----------------------------------|
+| `127.0.0.1:8790:8790` | No | Yes (host tunnel-client) |
+| `<LAN-IP>:8790:8790` | Yes | Use `<LAN-IP>:8790` instead |
+
+Document binding overrides in gitignored `DEPLOYMENT.local.md`. Do not change `compose.yml` in this repository merely to match a single deployment unless that becomes the agreed default.
+
+## Troubleshooting
+
+### Symptom: ChatGPT returns `502`; tunnel `/readyz` returns `503`; Docker shows healthy
+
+`docker compose ps` may report the MCP container as **healthy** while ChatGPT still cannot reach the service.
+
+**Likely cause:** tunnel upstream points to a different host interface than Docker is listening on.
+
+Example mismatch:
+
+```text
+Docker listening:  192.168.50.234:8790
+Tunnel upstream:   http://127.0.0.1:8790/mcp
+```
+
+**Fix:** configure the tunnel upstream URL to an address where the MCP is actually reachable from the process running `tunnel-client`. Verify with:
+
+```bash
+curl -fsS http://<upstream-host>:8790/healthz && echo
+```
+
+from the same host that runs the tunnel.
+
+Do not expose the MCP on the public Internet without authentication.
+
+### Symptom: Cursor cannot connect
+
+- Confirm the MCP is started (`docker compose ps`)
+- Confirm port `8790` is published on an interface reachable from your workstation
+- Confirm `curl` to `http://<host>:8790/healthz` succeeds from the Cursor machine
 
 ## OpenAI Secure MCP Tunnel
 

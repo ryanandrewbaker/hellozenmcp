@@ -56,6 +56,17 @@ Although this connector is read-only, uses narrowly scoped credentials, binds it
 
 Docker Compose is configured with `restart: "no"` so the service does not automatically start after a host reboot, Docker daemon restart, or container exit. The normal resting state is **STOPPED**.
 
+### v1.0 access model
+
+Version 1.0 supports:
+
+- **Cursor** — direct Streamable HTTP over a trusted LAN
+- **ChatGPT** — OpenAI Secure MCP Tunnel to a private MCP endpoint
+
+Version 1.0 does **not** provide OAuth authentication or a general public HTTPS MCP endpoint. Future releases may add Cloudflare Tunnel and OAuth 2.1 (see [docs/BACKLOG.md](docs/BACKLOG.md)).
+
+The LAN HTTP endpoint must not be treated as safe for untrusted networks or public Internet exposure.
+
 This does not make compromise impossible. It is **defence in depth** that reduces:
 
 - credential exposure window

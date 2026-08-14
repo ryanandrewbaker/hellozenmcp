@@ -111,9 +111,11 @@ describe('repository artifact security', () => {
   it('includes ChatGPT connection field guide and backlog', () => {
     const fieldGuide = readRepoFile('docs/connecting-to-chatgpt.md');
     const backlog = readRepoFile('docs/BACKLOG.md');
+    const changelog = readRepoFile('CHANGELOG.md');
 
     expect(fieldGuide).toContain('Secure MCP Tunnel');
     expect(fieldGuide).toContain('restart: "no"');
     expect(backlog.toLowerCase()).toContain('oauth');
+    expect(changelog).toContain('1.0.0');
   });
 });
