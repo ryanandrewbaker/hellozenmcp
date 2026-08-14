@@ -12,7 +12,6 @@ import { ToolRateLimiter } from '../rate-limit/tool-rate-limit.js';
 import {
   createAuthenticatedRateLimiter,
   createPreAuthRateLimiter,
-  loadTrustedIngress,
 } from './rate-limit.js';
 
 const MCP_BODY_LIMIT = '16kb';
@@ -45,11 +44,7 @@ export function createApp(options: CreateAppOptions): Express {
   const mcpRouter = express.Router();
   mcpRouter.use(express.json({ limit: MCP_BODY_LIMIT }));
 
-  const trustedIngress = options.auth.enabled
-    ? loadTrustedIngress()
-    : undefined;
-
-  mcpRouter.use(createPreAuthRateLimiter(trustedIngress));
+  mcpRouter.use(createPreAuthRateLimiter());
 
   if (options.auth.enabled) {
     mcpRouter.use(

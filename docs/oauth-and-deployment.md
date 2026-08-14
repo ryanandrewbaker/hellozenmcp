@@ -93,10 +93,10 @@ Two layers protect `/mcp`:
 
 | Layer | When | Key | Purpose |
 |-------|------|-----|---------|
-| Pre-auth | Before `requireBearerAuth` | Socket IP, or `CF-Connecting-IP` when `HELLOZEN_MCP_TRUSTED_INGRESS=cloudflare` | Coarse unauthenticated DoS guard |
+| Pre-auth | Before `requireBearerAuth` | Socket peer address (`req.socket.remoteAddress`) | Coarse unauthenticated DoS guard |
 | Post-auth | After successful bearer validation | OAuth `clientId` | Per-client authenticated throttling |
 
-Express `trust proxy` is **not** enabled globally. Forwarded headers are only consulted when `HELLOZEN_MCP_TRUSTED_INGRESS=cloudflare` is explicitly set for Cloudflare Tunnel ingress.
+Express `trust proxy` is **not** enabled. Pre-auth limiting does not inspect `CF-Connecting-IP`, `X-Forwarded-For`, or other forwarded headers. All external requests arriving through `cloudflared` may share one pre-auth bucket; authenticated clients are throttled independently by OAuth `clientId`.
 
 ### Tool metadata note
 
@@ -176,7 +176,6 @@ See [.env.example](../.env.example). Key values:
 | `HELLOZEN_MCP_OAUTH_ISSUER` | External authorization server issuer (required) |
 | `HELLOZEN_MCP_OAUTH_AUDIENCE` | Token audience (defaults to resource URL) |
 | `HELLOZEN_MCP_OAUTH_JWKS_URI` | Optional override if discovery omits `jwks_uri` |
-| `HELLOZEN_MCP_TRUSTED_INGRESS` | Set to `cloudflare` when external ingress is via Cloudflare Tunnel |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Remotely managed tunnel token (never commit) |
 
 OAuth cannot be disabled via environment variables in the production server.
@@ -204,8 +203,6 @@ Loopback binding `127.0.0.1:8790:8790` is preserved for OpenAI tunnel-client rea
 
 docker compose -f compose.yml -f compose.cloudflare.yml --profile cloudflare up -d
 ```
-
-Set `HELLOZEN_MCP_TRUSTED_INGRESS=cloudflare` so pre-authentication rate limiting uses `CF-Connecting-IP` from the tunnel edge. This does **not** enable Express `trust proxy`.
 
 `cloudflared` (`cloudflare/cloudflared:2026.7.3`, pinned deliberately) connects over the private Docker network `hellozen-mcp-net` to `http://hellozen-mcp:8790`. Upgrade the pinned image only after reviewing Cloudflare release notes.
 

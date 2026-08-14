@@ -69,14 +69,4 @@ describe('loadAuthConfig', () => {
       }),
     ).rejects.toThrow(/HELLOZEN_MCP_RESOURCE_URL must not contain a fragment/);
   });
-
-  it('rejects unknown trusted ingress values at startup', async () => {
-    await expect(
-      loadAuthConfig({
-        HELLOZEN_MCP_RESOURCE_URL: 'https://mcp.test.example/mcp',
-        HELLOZEN_MCP_OAUTH_ISSUER: 'https://auth.test.example',
-        HELLOZEN_MCP_TRUSTED_INGRESS: 'nginx',
-      }),
-    ).rejects.toThrow(/must be "cloudflare"/);
-  });
 });

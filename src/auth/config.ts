@@ -15,7 +15,6 @@ import {
 } from './issuer.js';
 import { HELLOZEN_READ_SCOPE } from './scopes.js';
 import { createRemoteJwtVerifier } from './jwt-verifier.js';
-import { loadTrustedIngress } from '../http/rate-limit.js';
 
 const httpsUrlSchema = z
   .string()
@@ -37,7 +36,6 @@ const authEnvSchema = z.object({
   HELLOZEN_MCP_OAUTH_ISSUER: httpsUrlSchema,
   HELLOZEN_MCP_OAUTH_AUDIENCE: httpsUrlSchema.optional(),
   HELLOZEN_MCP_OAUTH_JWKS_URI: httpsUrlSchema.optional(),
-  HELLOZEN_MCP_TRUSTED_INGRESS: z.string().optional(),
 });
 
 /** Test-only: injected by unit tests to bypass OAuth. Not available via environment. */
@@ -123,8 +121,6 @@ export async function loadAuthConfig(
         'HELLOZEN_MCP_OAUTH_AUDIENCE',
       ).href
     : resourceUrl.href;
-
-  loadTrustedIngress(env);
 
   const metadata = await fetchAuthorizationServerMetadata(
     configuredIssuer,

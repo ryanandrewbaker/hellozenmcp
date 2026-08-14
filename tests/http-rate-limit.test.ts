@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  loadTrustedIngress,
+  resolveAuthenticatedClientKey,
   resolvePreAuthClientKey,
 } from '../src/http/rate-limit.js';
 
 describe('HTTP rate limiting keys', () => {
-  it('uses socket remote address by default', () => {
+  it('uses socket remoteAddress as the pre-auth key', () => {
     const key = resolvePreAuthClientKey({
       headers: {},
       socket: { remoteAddress: '10.0.0.5' },
@@ -13,31 +13,34 @@ describe('HTTP rate limiting keys', () => {
     expect(key).toBe('socket:10.0.0.5');
   });
 
-  it('uses CF-Connecting-IP only when trusted ingress is cloudflare', () => {
-    const key = resolvePreAuthClientKey(
-      {
-        headers: { 'cf-connecting-ip': '203.0.113.10' },
-        socket: { remoteAddress: '172.18.0.2' },
-      } as never,
-      'cloudflare',
-    );
-    expect(key).toBe('cf:203.0.113.10');
-  });
-
-  it('falls back to socket address when cloudflare ingress is set but header is absent', () => {
-    const key = resolvePreAuthClientKey(
-      {
-        headers: {},
-        socket: { remoteAddress: '172.18.0.2' },
-      } as never,
-      'cloudflare',
-    );
+  it('ignores CF-Connecting-IP for the pre-auth key', () => {
+    const key = resolvePreAuthClientKey({
+      headers: { 'cf-connecting-ip': '203.0.113.10' },
+      socket: { remoteAddress: '172.18.0.2' },
+    } as never);
     expect(key).toBe('socket:172.18.0.2');
   });
 
-  it('rejects unknown trusted ingress values at startup', () => {
-    expect(() =>
-      loadTrustedIngress({ HELLOZEN_MCP_TRUSTED_INGRESS: 'nginx' }),
-    ).toThrow(/must be "cloudflare"/);
+  it('ignores X-Forwarded-For for the pre-auth key', () => {
+    const key = resolvePreAuthClientKey({
+      headers: { 'x-forwarded-for': '203.0.113.10, 198.51.100.1' },
+      socket: { remoteAddress: '172.18.0.2' },
+    } as never);
+    expect(key).toBe('socket:172.18.0.2');
+  });
+
+  it('falls back safely when socket remoteAddress is missing', () => {
+    const key = resolvePreAuthClientKey({
+      headers: {},
+      socket: {},
+    } as never);
+    expect(key).toBe('socket:unknown');
+  });
+
+  it('keys the authenticated limiter by req.auth.clientId', () => {
+    const key = resolveAuthenticatedClientKey({
+      auth: { clientId: 'cursor-client' },
+    } as never);
+    expect(key).toBe('client:cursor-client');
   });
 });
