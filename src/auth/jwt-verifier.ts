@@ -23,11 +23,10 @@ const ALLOWED_ALGORITHMS = [
   'PS512',
 ] as const;
 
-const ACCESS_TOKEN_HEADER_TYPES = new Set([
+const ALLOWED_ACCESS_TOKEN_HEADER_TYPES = new Set([
   'at+jwt',
   'application/at+jwt',
   'jwt',
-  'JWT',
 ]);
 
 export type JwtVerifierOptions = {
@@ -60,10 +59,18 @@ function mapVerificationError(error: unknown): string {
   return 'Invalid access token';
 }
 
-function normalizeResourceIdentifier(value: string): string {
-  const url = new URL(value);
-  url.hash = '';
-  url.search = '';
+function parseAbsoluteResourceUri(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new InvalidTokenError('Token resource claim is not a valid URI');
+  }
+
+  if (!url.protocol.startsWith('http')) {
+    throw new InvalidTokenError('Token resource claim must be an absolute URI');
+  }
+
   return url.href;
 }
 
@@ -71,14 +78,14 @@ function resourceClaimMatches(
   claim: unknown,
   expectedResource: URL,
 ): boolean {
-  const expected = normalizeResourceIdentifier(expectedResource.href);
+  const expected = expectedResource.href;
   const values = Array.isArray(claim) ? claim : [claim];
 
   return values.some((value) => {
     if (typeof value !== 'string') {
       return false;
     }
-    return normalizeResourceIdentifier(value) === expected;
+    return parseAbsoluteResourceUri(value) === expected;
   });
 }
 
@@ -98,7 +105,8 @@ function assertAccessTokenHeaderType(token: string): void {
     return;
   }
 
-  if (ACCESS_TOKEN_HEADER_TYPES.has(typ)) {
+  const normalizedTyp = typ.toLowerCase();
+  if (ALLOWED_ACCESS_TOKEN_HEADER_TYPES.has(normalizedTyp)) {
     return;
   }
 

@@ -92,17 +92,23 @@ export async function createTestAccessToken(
     payload.resource = options.resource ?? TEST_AUDIENCE;
   }
 
-  const headerTyp = options.typ ?? 'at+jwt';
-
   const builder = new SignJWT(payload)
-    .setProtectedHeader({
-      alg: 'RS256',
-      kid: 'test-key',
-      typ: headerTyp,
-    })
     .setIssuer(options.issuer ?? TEST_ISSUER)
     .setAudience(options.audience ?? TEST_AUDIENCE)
     .setIssuedAt(now);
+
+  if (options.typ === '') {
+    builder.setProtectedHeader({
+      alg: 'RS256',
+      kid: 'test-key',
+    });
+  } else {
+    builder.setProtectedHeader({
+      alg: 'RS256',
+      kid: 'test-key',
+      typ: options.typ ?? 'at+jwt',
+    });
+  }
 
   if (includeExpiration) {
     builder.setExpirationTime(now + expiresInSeconds);
@@ -114,7 +120,10 @@ export async function createTestAccessToken(
 
   if (options.unsigned) {
     const header = Buffer.from(
-      JSON.stringify({ alg: 'none', typ: headerTyp }),
+      JSON.stringify({
+        alg: 'none',
+        ...(options.typ && options.typ !== '' ? { typ: options.typ } : {}),
+      }),
     ).toString('base64url');
     const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
     return `${header}.${body}.`;

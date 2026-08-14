@@ -117,11 +117,14 @@ HELLOZEN_MCP_REQUIRED_SCOPE=hellozen.read
 
 On startup the MCP server:
 
-1. constructs RFC 8414 / OIDC Discovery URLs (including path-aware issuers)
+1. constructs RFC 8414 OAuth AS Metadata discovery URLs **before** OIDC Discovery URLs
 2. fetches authorization server metadata from the configured issuer
 3. uses the metadata `issuer` value exactly as the canonical JWT `iss` validator
 4. validates required capabilities (authorization code + PKCE S256) are advertised
-5. fails closed if discovery, issuer correspondence, JWKS trust, or capability validation fails
+5. trusts HTTPS `jwks_uri` from validated discovery metadata (cross-origin permitted)
+6. fails closed if discovery, issuer correspondence, JWKS trust, URL validation, or capability validation fails
+
+Configured `HELLOZEN_MCP_OAUTH_ISSUER` and `HELLOZEN_MCP_RESOURCE_URL` must not contain query strings or fragments.
 
 ### Client registration strategy (v1.1)
 

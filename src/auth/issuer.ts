@@ -5,18 +5,45 @@
  * Configured issuer must correspond to discovered issuer before trusting metadata.
  */
 
-export function stripUrlQueryAndFragment(value: string): URL {
-  const url = new URL(value);
-  url.hash = '';
-  url.search = '';
-  return url;
-}
-
 /** Remove a single trailing slash from the pathname (not the scheme delimiter). */
 export function stripTrailingSlash(href: string): string {
   return href.endsWith('/') && href.length > 'https://x'.length
     ? href.slice(0, -1)
     : href;
+}
+
+/**
+ * Parse a configured security URL without mutating query or fragment components.
+ * Rejects URLs that contain query strings or fragments.
+ */
+export function parseConfiguredSecurityUrl(
+  value: string,
+  envVar: string,
+): URL {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${envVar} must be a valid absolute URL`);
+  }
+
+  if (url.search) {
+    throw new Error(`${envVar} must not contain a query string`);
+  }
+
+  if (url.hash) {
+    throw new Error(`${envVar} must not contain a fragment`);
+  }
+
+  return url;
+}
+
+export function parseConfiguredIssuerUrl(value: string): URL {
+  return parseConfiguredSecurityUrl(value, 'HELLOZEN_MCP_OAUTH_ISSUER');
+}
+
+export function parseConfiguredResourceUrl(value: string): URL {
+  return parseConfiguredSecurityUrl(value, 'HELLOZEN_MCP_RESOURCE_URL');
 }
 
 /**
@@ -65,20 +92,35 @@ export function buildPathAwareWellKnownUrl(
   );
 }
 
+function issuerHasPathComponent(issuer: URL): boolean {
+  const parsed = new URL(stripTrailingSlash(issuer.href));
+  return parsed.pathname !== '/' && parsed.pathname !== '';
+}
+
+/**
+ * Discovery candidates per RFC 8414 (OAuth AS Metadata) before OIDC Discovery.
+ *
+ * Root issuer:
+ *   1. /.well-known/oauth-authorization-server
+ *   2. /.well-known/openid-configuration
+ *
+ * Path issuer adds OIDC legacy path-appended form after the RFC path-aware pair:
+ *   3. {issuer-path}/.well-known/openid-configuration
+ */
 export function buildAuthorizationServerDiscoveryCandidates(
   issuer: URL,
 ): URL[] {
   const candidates = [
-    buildPathAwareWellKnownUrl(issuer, 'openid-configuration'),
     buildPathAwareWellKnownUrl(issuer, 'oauth-authorization-server'),
+    buildPathAwareWellKnownUrl(issuer, 'openid-configuration'),
   ];
 
-  // Legacy fallback: well-known appended to issuer path (some deployments).
-  const legacyBase = stripTrailingSlash(issuer.href);
-  candidates.push(
-    new URL('.well-known/openid-configuration', `${legacyBase}/`),
-    new URL('.well-known/oauth-authorization-server', `${legacyBase}/`),
-  );
+  if (issuerHasPathComponent(issuer)) {
+    const legacyBase = stripTrailingSlash(issuer.href);
+    candidates.push(
+      new URL('.well-known/openid-configuration', `${legacyBase}/`),
+    );
+  }
 
   return candidates;
 }
@@ -96,23 +138,9 @@ export function assertHttpsOrLocalhost(url: URL, label: string): void {
 }
 
 /**
- * JWKS URI must be HTTPS (or localhost) and originate from the same host as the
- * configured issuer unless explicitly overridden via HELLOZEN_MCP_OAUTH_JWKS_URI.
+ * JWKS URI must be HTTPS (or localhost in development).
+ * Cross-origin JWKS endpoints advertised by validated discovery metadata are permitted.
  */
-export function assertJwksUriTrusted(
-  jwksUri: URL,
-  issuer: URL,
-  overridden: boolean,
-): void {
+export function assertJwksUriTrusted(jwksUri: URL): void {
   assertHttpsOrLocalhost(jwksUri, 'JWKS URI');
-
-  if (overridden) {
-    return;
-  }
-
-  if (jwksUri.origin !== issuer.origin) {
-    throw new Error(
-      `JWKS URI origin ${jwksUri.origin} does not match issuer origin ${issuer.origin}`,
-    );
-  }
 }

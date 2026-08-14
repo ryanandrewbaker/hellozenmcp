@@ -1,0 +1,26 @@
+title = "hellozenmcp gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+paths = [
+  '''\.env\.example$''',
+  '''tests/fixtures/''',
+]
+
+[rules]
+[rules.hellozen-readonly-token]
+description = "HelloZen MCP read-only token assignment"
+regex = '''HELLOZEN_MCP_READONLY_TOKEN\s*=\s*(?!your-token-here|)\S+'''
+tags = ["hellozen", "token"]
+
+[rules.hellozen-private-integration-token]
+description = "Legacy KJP integration token variable"
+regex = '''HELLOZEN_PRIVATE_INTEGRATION_TOKEN\s*=\s*\S+'''
+tags = ["hellozen", "token"]
+
+[rules.bearer-token]
+description = "Bearer token in source"
+regex = '''(?i)bearer\s+[a-zA-Z0-9_\-\.]{20,}'''
+tags = ["token", "bearer"]

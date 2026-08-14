@@ -51,4 +51,22 @@ describe('loadAuthConfig', () => {
       ),
     ).rejects.toThrow(/S256/);
   });
+
+  it('rejects issuer URLs with query strings at startup', async () => {
+    await expect(
+      loadAuthConfig({
+        HELLOZEN_MCP_RESOURCE_URL: 'https://mcp.test.example/mcp',
+        HELLOZEN_MCP_OAUTH_ISSUER: 'https://auth.test.example?tenant=1',
+      }),
+    ).rejects.toThrow(/HELLOZEN_MCP_OAUTH_ISSUER must not contain a query string/);
+  });
+
+  it('rejects resource URLs with fragments at startup', async () => {
+    await expect(
+      loadAuthConfig({
+        HELLOZEN_MCP_RESOURCE_URL: 'https://mcp.test.example/mcp#x',
+        HELLOZEN_MCP_OAUTH_ISSUER: 'https://auth.test.example',
+      }),
+    ).rejects.toThrow(/HELLOZEN_MCP_RESOURCE_URL must not contain a fragment/);
+  });
 });

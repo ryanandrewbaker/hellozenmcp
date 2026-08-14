@@ -3,6 +3,8 @@ import {
   buildAuthorizationServerDiscoveryCandidates,
   buildPathAwareWellKnownUrl,
   issuersCorrespond,
+  parseConfiguredIssuerUrl,
+  parseConfiguredResourceUrl,
 } from '../../src/auth/issuer.js';
 
 describe('issuer discovery URL construction', () => {
@@ -38,19 +40,70 @@ describe('issuer discovery URL construction', () => {
     );
   });
 
-  it('includes RFC and legacy discovery candidates', () => {
-    const candidates = buildAuthorizationServerDiscoveryCandidates(
-      new URL('https://auth.example.com/tenant1'),
-    );
-    expect(candidates.map((url) => url.href)).toContain(
-      'https://auth.example.com/.well-known/openid-configuration/tenant1',
-    );
-    expect(candidates.map((url) => url.href)).toContain(
+  it('orders root-issuer discovery candidates OAuth before OIDC', () => {
+    expect(
+      buildAuthorizationServerDiscoveryCandidates(
+        new URL('https://auth.example.com'),
+      ).map((url) => url.href),
+    ).toEqual([
+      'https://auth.example.com/.well-known/oauth-authorization-server',
+      'https://auth.example.com/.well-known/openid-configuration',
+    ]);
+  });
+
+  it('orders path-issuer discovery candidates OAuth, OIDC, then OIDC legacy', () => {
+    expect(
+      buildAuthorizationServerDiscoveryCandidates(
+        new URL('https://auth.example.com/tenant1'),
+      ).map((url) => url.href),
+    ).toEqual([
       'https://auth.example.com/.well-known/oauth-authorization-server/tenant1',
-    );
-    expect(candidates.map((url) => url.href)).toContain(
+      'https://auth.example.com/.well-known/openid-configuration/tenant1',
       'https://auth.example.com/tenant1/.well-known/openid-configuration',
-    );
+    ]);
+  });
+
+  it('orders multi-segment path issuer discovery candidates', () => {
+    expect(
+      buildAuthorizationServerDiscoveryCandidates(
+        new URL('https://auth.example.com/tenant1/realm'),
+      ).map((url) => url.href),
+    ).toEqual([
+      'https://auth.example.com/.well-known/oauth-authorization-server/tenant1/realm',
+      'https://auth.example.com/.well-known/openid-configuration/tenant1/realm',
+      'https://auth.example.com/tenant1/realm/.well-known/openid-configuration',
+    ]);
+  });
+});
+
+describe('configured security URL parsing', () => {
+  it('rejects issuer URLs with query strings', () => {
+    expect(() =>
+      parseConfiguredIssuerUrl('https://auth.example.com?tenant=1'),
+    ).toThrow(/HELLOZEN_MCP_OAUTH_ISSUER must not contain a query string/);
+  });
+
+  it('rejects issuer URLs with fragments', () => {
+    expect(() =>
+      parseConfiguredIssuerUrl('https://auth.example.com#fragment'),
+    ).toThrow(/HELLOZEN_MCP_OAUTH_ISSUER must not contain a fragment/);
+  });
+
+  it('rejects resource URLs with query strings', () => {
+    expect(() =>
+      parseConfiguredResourceUrl('https://mcp.example.com/mcp?foo=bar'),
+    ).toThrow(/HELLOZEN_MCP_RESOURCE_URL must not contain a query string/);
+  });
+
+  it('rejects resource URLs with fragments', () => {
+    expect(() =>
+      parseConfiguredResourceUrl('https://mcp.example.com/mcp#section'),
+    ).toThrow(/HELLOZEN_MCP_RESOURCE_URL must not contain a fragment/);
+  });
+
+  it('preserves configured issuer URL without mutation', () => {
+    const issuer = parseConfiguredIssuerUrl('https://auth.example.com/');
+    expect(issuer.href).toBe('https://auth.example.com/');
   });
 });
 

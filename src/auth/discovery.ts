@@ -3,7 +3,7 @@ import {
   assertHttpsOrLocalhost,
   buildAuthorizationServerDiscoveryCandidates,
   issuersCorrespond,
-  stripUrlQueryAndFragment,
+  parseConfiguredIssuerUrl,
 } from './issuer.js';
 
 export type AuthorizationServerMetadata = OAuthMetadata & {
@@ -98,5 +98,5 @@ export function canonicalIssuerFromMetadata(
 }
 
 export function configuredIssuerUrl(value: string): URL {
-  return stripUrlQueryAndFragment(value);
+  return parseConfiguredIssuerUrl(value);
 }

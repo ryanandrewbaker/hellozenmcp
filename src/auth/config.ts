@@ -4,11 +4,15 @@ import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/p
 import { validateRequiredAuthorizationServerCapabilities } from './capabilities.js';
 import {
   canonicalIssuerFromMetadata,
-  configuredIssuerUrl,
   fetchAuthorizationServerMetadata,
   type AuthorizationServerMetadata,
 } from './discovery.js';
-import { assertJwksUriTrusted, stripUrlQueryAndFragment } from './issuer.js';
+import {
+  assertJwksUriTrusted,
+  parseConfiguredIssuerUrl,
+  parseConfiguredResourceUrl,
+  parseConfiguredSecurityUrl,
+} from './issuer.js';
 import { createRemoteJwtVerifier } from './jwt-verifier.js';
 
 const httpsUrlSchema = z
@@ -107,10 +111,18 @@ export async function loadAuthConfig(
     throw new Error(`Invalid OAuth environment configuration: ${message}`);
   }
 
-  const resourceUrl = stripUrlQueryAndFragment(parsed.data.HELLOZEN_MCP_RESOURCE_URL);
-  const configuredIssuer = configuredIssuerUrl(parsed.data.HELLOZEN_MCP_OAUTH_ISSUER);
-  const audience =
-    parsed.data.HELLOZEN_MCP_OAUTH_AUDIENCE ?? resourceUrl.href;
+  const resourceUrl = parseConfiguredResourceUrl(
+    parsed.data.HELLOZEN_MCP_RESOURCE_URL,
+  );
+  const configuredIssuer = parseConfiguredIssuerUrl(
+    parsed.data.HELLOZEN_MCP_OAUTH_ISSUER,
+  );
+  const audience = parsed.data.HELLOZEN_MCP_OAUTH_AUDIENCE
+    ? parseConfiguredSecurityUrl(
+        parsed.data.HELLOZEN_MCP_OAUTH_AUDIENCE,
+        'HELLOZEN_MCP_OAUTH_AUDIENCE',
+      ).href
+    : resourceUrl.href;
   const requiredScope = parsed.data.HELLOZEN_MCP_REQUIRED_SCOPE;
 
   const metadata = await fetchAuthorizationServerMetadata(
@@ -120,9 +132,11 @@ export async function loadAuthConfig(
   const canonicalIssuer = canonicalIssuerFromMetadata(metadata);
   const oauthMetadata = toOAuthMetadata(metadata);
 
-  const jwksOverride = parsed.data.HELLOZEN_MCP_OAUTH_JWKS_URI !== undefined;
   const jwksUri = parsed.data.HELLOZEN_MCP_OAUTH_JWKS_URI
-    ? new URL(parsed.data.HELLOZEN_MCP_OAUTH_JWKS_URI)
+    ? parseConfiguredSecurityUrl(
+        parsed.data.HELLOZEN_MCP_OAUTH_JWKS_URI,
+        'HELLOZEN_MCP_OAUTH_JWKS_URI',
+      )
     : metadata.jwks_uri
       ? new URL(metadata.jwks_uri)
       : undefined;
@@ -133,7 +147,7 @@ export async function loadAuthConfig(
     );
   }
 
-  assertJwksUriTrusted(jwksUri, configuredIssuer, jwksOverride);
+  assertJwksUriTrusted(jwksUri);
 
   const verifier = createRemoteJwtVerifier({
     issuer: canonicalIssuer,

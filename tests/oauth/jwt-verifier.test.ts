@@ -19,6 +19,23 @@ describe('JwtAccessTokenVerifier', () => {
     expect(authInfo.scopes).toContain('hellozen.read');
   });
 
+  it.each([
+  ['at+JWT'],
+  ['application/at+jwt'],
+  ['application/at+JWT'],
+  ['JWT'],
+])('accepts case-insensitive typ %s', async (typ) => {
+    const verifier = await createTestVerifier();
+    const token = await createTestAccessToken({ typ });
+    await expect(verifier.verifyAccessToken(token)).resolves.toBeDefined();
+  });
+
+  it('accepts tokens with absent typ header', async () => {
+    const verifier = await createTestVerifier();
+    const token = await createTestAccessToken({ typ: '' });
+    await expect(verifier.verifyAccessToken(token)).resolves.toBeDefined();
+  });
+
   it('accepts tokens with correct aud and no resource claim', async () => {
     const verifier = await createTestVerifier();
     const token = await createTestAccessToken({ resource: null });
@@ -50,6 +67,26 @@ describe('JwtAccessTokenVerifier', () => {
     const verifier = await createTestVerifier();
     const token = await createTestAccessToken({
       resource: 'https://other.example/mcp',
+    });
+    await expect(verifier.verifyAccessToken(token)).rejects.toThrow(
+      /resource mismatch/i,
+    );
+  });
+
+  it('rejects resource claims that differ only by query string', async () => {
+    const verifier = await createTestVerifier();
+    const token = await createTestAccessToken({
+      resource: `${TEST_AUDIENCE}?foo=bar`,
+    });
+    await expect(verifier.verifyAccessToken(token)).rejects.toThrow(
+      /resource mismatch/i,
+    );
+  });
+
+  it('rejects resource claims that differ only by fragment', async () => {
+    const verifier = await createTestVerifier();
+    const token = await createTestAccessToken({
+      resource: `${TEST_AUDIENCE}#section`,
     });
     await expect(verifier.verifyAccessToken(token)).rejects.toThrow(
       /resource mismatch/i,
