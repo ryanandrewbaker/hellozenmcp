@@ -5,12 +5,13 @@ import {
   type CryptoKey,
   type JWK,
 } from 'jose';
+import { HELLOZEN_READ_SCOPE } from '../../src/auth/scopes.js';
 import { createLocalJwtVerifier } from '../../src/auth/jwt-verifier.js';
 
 export const TEST_ISSUER = 'https://auth.test.example/';
 export const TEST_AUDIENCE = 'https://mcp.test.example/mcp';
 export const TEST_RESOURCE_URL = new URL(TEST_AUDIENCE);
-export const TEST_REQUIRED_SCOPE = 'hellozen.read';
+export const TEST_REQUIRED_SCOPE = HELLOZEN_READ_SCOPE;
 
 let privateKey: CryptoKey | undefined;
 let publicJwk: JWK | undefined;
@@ -157,7 +158,6 @@ export async function createEnabledTestAuth() {
     issuer: new URL(TEST_ISSUER),
     canonicalIssuer: TEST_ISSUER,
     audience: TEST_AUDIENCE,
-    requiredScope: TEST_REQUIRED_SCOPE,
     scopesSupported: [TEST_REQUIRED_SCOPE],
     oauthMetadata: TEST_OAUTH_METADATA,
     verifier,

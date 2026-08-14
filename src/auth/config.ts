@@ -13,7 +13,9 @@ import {
   parseConfiguredResourceUrl,
   parseConfiguredSecurityUrl,
 } from './issuer.js';
+import { HELLOZEN_READ_SCOPE } from './scopes.js';
 import { createRemoteJwtVerifier } from './jwt-verifier.js';
+import { loadTrustedIngress } from '../http/rate-limit.js';
 
 const httpsUrlSchema = z
   .string()
@@ -34,8 +36,8 @@ const authEnvSchema = z.object({
   HELLOZEN_MCP_RESOURCE_URL: httpsUrlSchema,
   HELLOZEN_MCP_OAUTH_ISSUER: httpsUrlSchema,
   HELLOZEN_MCP_OAUTH_AUDIENCE: httpsUrlSchema.optional(),
-  HELLOZEN_MCP_REQUIRED_SCOPE: z.string().min(1).default('hellozen.read'),
   HELLOZEN_MCP_OAUTH_JWKS_URI: httpsUrlSchema.optional(),
+  HELLOZEN_MCP_TRUSTED_INGRESS: z.string().optional(),
 });
 
 /** Test-only: injected by unit tests to bypass OAuth. Not available via environment. */
@@ -49,7 +51,6 @@ export type EnabledAuthConfig = {
   issuer: URL;
   canonicalIssuer: string;
   audience: string;
-  requiredScope: string;
   scopesSupported: string[];
   oauthMetadata: OAuthMetadata;
   verifier: OAuthTokenVerifier;
@@ -90,13 +91,12 @@ function toOAuthMetadata(
 
 function buildScopesSupported(
   metadata: AuthorizationServerMetadata,
-  requiredScope: string,
 ): string[] {
   const supported = metadata.scopes_supported ?? [];
-  if (supported.includes(requiredScope)) {
+  if (supported.includes(HELLOZEN_READ_SCOPE)) {
     return supported;
   }
-  return [...supported, requiredScope];
+  return [...supported, HELLOZEN_READ_SCOPE];
 }
 
 export async function loadAuthConfig(
@@ -123,7 +123,8 @@ export async function loadAuthConfig(
         'HELLOZEN_MCP_OAUTH_AUDIENCE',
       ).href
     : resourceUrl.href;
-  const requiredScope = parsed.data.HELLOZEN_MCP_REQUIRED_SCOPE;
+
+  loadTrustedIngress(env);
 
   const metadata = await fetchAuthorizationServerMetadata(
     configuredIssuer,
@@ -166,8 +167,7 @@ export async function loadAuthConfig(
     issuer: configuredIssuer,
     canonicalIssuer,
     audience,
-    requiredScope,
-    scopesSupported: buildScopesSupported(metadata, requiredScope),
+    scopesSupported: buildScopesSupported(metadata),
     oauthMetadata,
     verifier,
     resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceUrl),

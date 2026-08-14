@@ -87,6 +87,17 @@ Authorization Server discovery follows RFC 8414 / OIDC Discovery path-aware rule
 
 There is **no runtime environment flag** to disable OAuth on `/mcp`. Unit tests inject disabled auth directly.
 
+### HTTP rate limiting
+
+Two layers protect `/mcp`:
+
+| Layer | When | Key | Purpose |
+|-------|------|-----|---------|
+| Pre-auth | Before `requireBearerAuth` | Socket IP, or `CF-Connecting-IP` when `HELLOZEN_MCP_TRUSTED_INGRESS=cloudflare` | Coarse unauthenticated DoS guard |
+| Post-auth | After successful bearer validation | OAuth `clientId` | Per-client authenticated throttling |
+
+Express `trust proxy` is **not** enabled globally. Forwarded headers are only consulted when `HELLOZEN_MCP_TRUSTED_INGRESS=cloudflare` is explicitly set for Cloudflare Tunnel ingress.
+
 ### Tool metadata note
 
 SDK 1.30 exposes tool OAuth requirements via `registerTool` `_meta.securitySchemes`. OpenAI's current documentation shows top-level `securitySchemes` in newer SDK examples. Runtime enforcement happens at the HTTP layer via `requireBearerAuth`; tool metadata is advisory for clients such as ChatGPT.
@@ -112,8 +123,9 @@ You must provision a standards-compliant OAuth/OIDC authorization server. The MC
 HELLOZEN_MCP_RESOURCE_URL=https://mcp.<your-domain>/mcp
 HELLOZEN_MCP_OAUTH_ISSUER=https://auth.<your-domain>
 HELLOZEN_MCP_OAUTH_AUDIENCE=https://mcp.<your-domain>/mcp
-HELLOZEN_MCP_REQUIRED_SCOPE=hellozen.read
 ```
+
+All MCP tools require the fixed scope `hellozen.read` (not configurable in v1.1).
 
 On startup the MCP server:
 
@@ -163,8 +175,8 @@ See [.env.example](../.env.example). Key values:
 | `HELLOZEN_MCP_RESOURCE_URL` | Canonical MCP resource identity (required) |
 | `HELLOZEN_MCP_OAUTH_ISSUER` | External authorization server issuer (required) |
 | `HELLOZEN_MCP_OAUTH_AUDIENCE` | Token audience (defaults to resource URL) |
-| `HELLOZEN_MCP_REQUIRED_SCOPE` | `hellozen.read` |
 | `HELLOZEN_MCP_OAUTH_JWKS_URI` | Optional override if discovery omits `jwks_uri` |
+| `HELLOZEN_MCP_TRUSTED_INGRESS` | Set to `cloudflare` when external ingress is via Cloudflare Tunnel |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Remotely managed tunnel token (never commit) |
 
 OAuth cannot be disabled via environment variables in the production server.
@@ -183,11 +195,17 @@ Loopback binding `127.0.0.1:8790:8790` is preserved for OpenAI tunnel-client rea
 ### Cloudflare Tunnel (after OAuth verified locally)
 
 ```bash
-# Configure tunnel ingress in Cloudflare Zero Trust:
-# public hostname https://mcp.<your-domain>/mcp → http://hellozen-mcp:8790
+# In Cloudflare Zero Trust, publish the whole hostname to the origin:
+#   mcp.example.com → http://hellozen-mcp:8790
+# Do NOT route only /mcp — OAuth protected-resource metadata lives at:
+#   https://mcp.example.com/.well-known/oauth-protected-resource/mcp
+# Configure MCP clients against:
+#   https://mcp.example.com/mcp
 
 docker compose -f compose.yml -f compose.cloudflare.yml --profile cloudflare up -d
 ```
+
+Set `HELLOZEN_MCP_TRUSTED_INGRESS=cloudflare` so pre-authentication rate limiting uses `CF-Connecting-IP` from the tunnel edge. This does **not** enable Express `trust proxy`.
 
 `cloudflared` (`cloudflare/cloudflared:2026.7.3`, pinned deliberately) connects over the private Docker network `hellozen-mcp-net` to `http://hellozen-mcp:8790`. Upgrade the pinned image only after reviewing Cloudflare release notes.
 
@@ -238,17 +256,20 @@ ChatGPT continues to use the **OpenAI Secure MCP Tunnel** — do not point ChatG
    # Expect 401 + WWW-Authenticate
    ```
 4. Start OpenAI `tunnel-client` targeting a **reachable** upstream (see [connecting-to-chatgpt.md](connecting-to-chatgpt.md))
-5. Verify tunnel readiness: `curl -fsS http://127.0.0.1:8791/readyz`
-6. Verify OAuth metadata through tunnel:
+5. Verify tunnel operational surfaces locally:
    ```bash
-   curl -fsS http://127.0.0.1:8791/.well-known/oauth-protected-resource/mcp
+   curl -fsS http://127.0.0.1:8791/readyz && echo
+   curl -fsS http://127.0.0.1:8791/healthz && echo
+   # Optional admin UI: http://127.0.0.1:8791/ui
+   tunnel-client doctor <config-path> --explain
    ```
-7. In ChatGPT → Settings → Connectors → configure custom MCP:
+   The tunnel client's local listener (`8791`) exposes operational endpoints only (`/healthz`, `/readyz`, `/metrics`, `/ui`). It is **not** a generic MCP/OAuth proxy — OAuth discovery for ChatGPT travels through the OpenAI-hosted tunnel endpoint.
+6. In ChatGPT → Settings → Connectors → configure custom MCP:
    - Connection: **OpenAI Secure MCP Tunnel** (not public URL)
    - Authentication: OAuth with your predefined ChatGPT client
    - Scope: `hellozen.read`
-8. Complete the browser OAuth flow when ChatGPT prompts
-9. Confirm four tools appear and a tool call succeeds
+7. Complete the browser OAuth flow when ChatGPT prompts (this performs OAuth discovery through the OpenAI tunnel path)
+8. Confirm four tools appear and a tool call succeeds
 
 ### Manual ChatGPT reconnection checklist
 

@@ -14,6 +14,7 @@ import {
   listWorkflowsInputSchema,
   listWorkflowsOutputSchema,
 } from '../schemas/mcp-output.js';
+import { HELLOZEN_READ_SCOPE } from '../auth/scopes.js';
 
 const READ_ONLY_ANNOTATIONS = {
   readOnlyHint: true,
@@ -21,10 +22,8 @@ const READ_ONLY_ANNOTATIONS = {
   openWorldHint: false,
 } as const;
 
-const READ_SCOPE = 'hellozen.read';
-
 const OAUTH_TOOL_META = {
-  securitySchemes: [{ type: 'oauth2', scopes: [READ_SCOPE] }],
+  securitySchemes: [{ type: 'oauth2', scopes: [HELLOZEN_READ_SCOPE] }],
 } as const;
 
 export const APPROVED_TOOL_NAMES = [

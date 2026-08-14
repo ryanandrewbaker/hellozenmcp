@@ -58,6 +58,7 @@ describe('repository artifact security', () => {
     expect(envExample).toContain('HELLOZEN_MCP_OAUTH_ISSUER=');
     expect(envExample).not.toContain('HELLOZEN_MCP_AUTH_ENABLED');
     expect(envExample).not.toContain('HELLOZEN_MCP_ALLOW_AUTH_DISABLED');
+    expect(envExample).not.toContain('HELLOZEN_MCP_REQUIRED_SCOPE');
     expect(envExample).not.toMatch(/pit-[a-z0-9-]+/i);
   });
 

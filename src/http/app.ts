@@ -1,5 +1,4 @@
 import express, { type Express } from 'express';
-import rateLimit from 'express-rate-limit';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { mcpAuthMetadataRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
@@ -7,8 +6,14 @@ import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middlew
 import type { ReadOnlyHelloZenClient } from '../hellozen/client.js';
 import { SERVICE_NAME } from '../config/env.js';
 import type { AppAuthOptions } from '../auth/config.js';
+import { HELLOZEN_READ_SCOPE } from '../auth/scopes.js';
 import { buildMcpServer } from '../mcp/server.js';
 import { ToolRateLimiter } from '../rate-limit/tool-rate-limit.js';
+import {
+  createAuthenticatedRateLimiter,
+  createPreAuthRateLimiter,
+  loadTrustedIngress,
+} from './rate-limit.js';
 
 const MCP_BODY_LIMIT = '16kb';
 
@@ -39,24 +44,22 @@ export function createApp(options: CreateAppOptions): Express {
 
   const mcpRouter = express.Router();
   mcpRouter.use(express.json({ limit: MCP_BODY_LIMIT }));
-  mcpRouter.use(
-    rateLimit({
-      windowMs: 60_000,
-      max: 300,
-      standardHeaders: true,
-      legacyHeaders: false,
-      message: { error: 'Too many MCP requests' },
-    }),
-  );
+
+  const trustedIngress = options.auth.enabled
+    ? loadTrustedIngress()
+    : undefined;
+
+  mcpRouter.use(createPreAuthRateLimiter(trustedIngress));
 
   if (options.auth.enabled) {
     mcpRouter.use(
       requireBearerAuth({
         verifier: options.auth.verifier,
-        requiredScopes: [options.auth.requiredScope],
+        requiredScopes: [HELLOZEN_READ_SCOPE],
         resourceMetadataUrl: options.auth.resourceMetadataUrl,
       }),
     );
+    mcpRouter.use(createAuthenticatedRateLimiter());
   }
 
   const toolRateLimiter =

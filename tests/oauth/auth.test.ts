@@ -39,6 +39,15 @@ describe('OAuth resource server', () => {
     expect(response.body.error).toBe('invalid_token');
   });
 
+  it('rejects malformed three-segment JWTs at the HTTP layer with 401', async () => {
+    const response = await request(protectedApp)
+      .post('/mcp')
+      .set('Authorization', 'Bearer abc.def.ghi')
+      .send({});
+    expect(response.status).toBe(401);
+    expect(response.status).not.toBe(500);
+  });
+
   it('rejects non-bearer Authorization schemes', async () => {
     const response = await request(protectedApp)
       .post('/mcp')

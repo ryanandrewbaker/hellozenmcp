@@ -1,3 +1,6 @@
+/** Required OAuth scope for all MCP tools in v1.1. Not configurable. */
+export const HELLOZEN_READ_SCOPE = 'hellozen.read' as const;
+
 export function parseTokenScopes(
   scopeClaim: unknown,
 ): string[] {

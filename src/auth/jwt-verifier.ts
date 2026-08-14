@@ -98,7 +98,13 @@ function resourceClaimMatches(
  * `typ: JWT`, and we do not attempt universal ID-token detection here.
  */
 function assertAccessTokenHeaderType(token: string): void {
-  const header = decodeProtectedHeader(token);
+  let header;
+  try {
+    header = decodeProtectedHeader(token);
+  } catch {
+    throw new InvalidTokenError('Malformed bearer token');
+  }
+
   const typ = header.typ;
 
   if (typ === undefined) {
@@ -132,9 +138,8 @@ export class JwtAccessTokenVerifier implements OAuthTokenVerifier {
       throw new InvalidTokenError('Malformed bearer token');
     }
 
-    assertAccessTokenHeaderType(token);
-
     try {
+      assertAccessTokenHeaderType(token);
       const { payload } = await jwtVerify(token, this.options.jwks, {
         issuer: this.options.issuer,
         audience: this.options.audience,

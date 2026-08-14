@@ -108,6 +108,13 @@ describe('JwtAccessTokenVerifier', () => {
     );
   });
 
+  it('rejects malformed three-segment JWTs', async () => {
+    const verifier = await createTestVerifier();
+    await expect(verifier.verifyAccessToken('abc.def.ghi')).rejects.toThrow(
+      /Malformed bearer token/i,
+    );
+  });
+
   it('rejects unsupported typ values', async () => {
     const verifier = await createTestVerifier();
     const token = await createTestAccessToken({ typ: 'refresh+jwt' });
