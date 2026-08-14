@@ -1,10 +1,10 @@
 # HelloZen Read-Only MCP
 
-**HelloZen MCP 1.0** — first stable baseline release. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+**HelloZen MCP 1.1** — OAuth-protected MCP with Cloudflare Tunnel support. See [CHANGELOG.md](CHANGELOG.md). The **v1.0.0** baseline remains available as a rollback tag.
 
 An unofficial, self-hosted, strictly read-only MCP connector designed for inspecting HelloZen configuration.
 
-Use this connector with **Cursor** (trusted LAN), **ChatGPT** (via OpenAI Secure MCP Tunnel), or MCP Inspector to review custom fields, pipelines, calendars, and workflows when planning integrations for a photography studio on HelloZen — without exposing contact data or write access.
+Use this connector with **Cursor** (HTTPS via Cloudflare Tunnel + OAuth), **ChatGPT** (via OpenAI Secure MCP Tunnel + OAuth), or MCP Inspector to review custom fields, pipelines, calendars, and workflows when planning integrations for a photography studio on HelloZen — without exposing contact data or write access.
 
 > **Disclaimer:** This project is unofficial and is not affiliated with, endorsed by, or supported by HelloZen unless explicitly approved by the HelloZen owner. Do not use HelloZen logos or imply official partnership.
 
@@ -28,36 +28,41 @@ It does **not** access contacts, conversations, appointments, opportunity record
 ## Architecture
 
 ```text
-MCP client
-     ↓
-Streamable HTTP (/mcp)
-     ↓
-Express + MCP server
-     ↓
-Read-only MCP tools (×4)
-     ↓
-ReadOnlyHelloZenClient
-     ↓
-GET-only transport
-     ↓
-LeadConnector / HelloZen API
+                    OAuth Authorization Server
+                           ▲           ▲
+                           │           │
+                     Cursor login   ChatGPT login
+                           │           │
+                           ▼           ▼
+
+Cursor ──HTTPS──► Cloudflare       OpenAI ◄── ChatGPT
+                  Tunnel            Tunnel
+                     │                │
+                     └───────┬────────┘
+                             ▼
+                      OAuth-protected
+                       HelloZen MCP (/mcp)
+                             │
+                    server-side token
+                             ▼
+                       HelloZen API
 ```
 
-### v1.0 client paths
+### v1.1 client paths
 
-Version 1.0 supports two proven connection patterns:
-
-**Cursor — direct LAN HTTP**
+**Cursor / external MCP clients — Cloudflare Tunnel + OAuth**
 
 ```text
-Cursor (trusted LAN)
+Cursor
+   ↓ HTTPS
+Cloudflare Tunnel (transport only)
    ↓
-http://<host-lan-ip>:8790/mcp
+OAuth bearer token validation
    ↓
-hellozen-mcp
+hellozen-mcp (/mcp)
 ```
 
-**ChatGPT — OpenAI Secure MCP Tunnel**
+**ChatGPT — OpenAI Secure MCP Tunnel + OAuth**
 
 ```text
 ChatGPT
@@ -66,36 +71,41 @@ OpenAI Secure MCP Tunnel
    ↓
 tunnel-client (on private host)
    ↓
-http://<reachable-mcp-address>:8790/mcp
+OAuth bearer token validation
    ↓
-hellozen-mcp
+hellozen-mcp (/mcp)
 ```
 
-v1.0 does **not** provide a general authenticated public MCP endpoint. Future work may add Cloudflare Tunnel and OAuth 2.1 for a canonical HTTPS endpoint — see [docs/BACKLOG.md](docs/BACKLOG.md). That is **not** part of v1.0.
+v1.1 does **not** use Cloudflare Access in front of MCP. OAuth is the single application authorization layer.
 
-## Security model (v1.0)
+For full OAuth, Cloudflare, Cursor, and ChatGPT setup: **[docs/oauth-and-deployment.md](docs/oauth-and-deployment.md)**
+
+### v1.0 rollback (`v1.0.0` tag)
+
+Version 1.0 supported unauthenticated LAN Cursor access and no-auth ChatGPT tunnel access. That baseline is preserved at git tag `v1.0.0` for rollback.
+## Security model (v1.1)
 
 - HelloZen API access is **read-only** (four fixed `GET` endpoints only)
+- MCP `/mcp` requires OAuth bearer tokens with `hellozen.read` on **all** network paths (LAN, Cloudflare, OpenAI tunnel)
 - The HelloZen Private Integration token is **server-side only** — never supply it to MCP clients, ChatGPT, or Cursor
 - Secrets live in `.env` on the deployment host; `.env` is gitignored and must never be committed
-- Responses are normalized and data-minimized; logs are sanitized
+- Responses are normalized and data-minimized; logs are sanitized (no bearer tokens or Authorization headers)
 - Rate limits, concurrency limits, and response size caps are enforced
 - There are **no HelloZen write tools**
-- v1.0 assumes **trusted network or tunnel access** to the MCP HTTP endpoint
-- v1.0 does **not** implement OAuth for arbitrary external MCP clients
-- The LAN HTTP endpoint is **not** suitable for public Internet exposure
-
-For on-demand availability and defence-in-depth rationale, see [SECURITY.md](SECURITY.md).
+- OAuth is fail-closed: invalid/missing auth config prevents startup when auth is enabled
+- Cloudflare Tunnel provides transport only — not application authentication
+- No LAN auth bypass, no Cloudflare Access double-auth
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [CHANGELOG.md](CHANGELOG.md) | Release history (v1.0.0 baseline) |
-| [docs/connecting-to-chatgpt.md](docs/connecting-to-chatgpt.md) | Field guide: private MCP → Secure MCP Tunnel → ChatGPT (full setup and operations) |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+| [docs/oauth-and-deployment.md](docs/oauth-and-deployment.md) | **v1.1:** OAuth, Cloudflare Tunnel, Cursor/ChatGPT setup, troubleshooting |
+| [docs/connecting-to-chatgpt.md](docs/connecting-to-chatgpt.md) | Field guide: private MCP → Secure MCP Tunnel → ChatGPT |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Planned improvements |
 | [SECURITY.md](SECURITY.md) | Security policy and on-demand availability rationale |
-| [DEPLOYMENT.local.md.example](DEPLOYMENT.local.md.example) | Operator-specific deployment notes template (copy to gitignored `DEPLOYMENT.local.md`) |
+| [DEPLOYMENT.local.md.example](DEPLOYMENT.local.md.example) | Operator-specific deployment notes template |
 
 ## Read-only security model
 
@@ -265,49 +275,62 @@ Use `docker compose stop` for normal shutdown. You do **not** need `docker compo
 
 After a Vision or Docker daemon reboot, the connector remains stopped until you explicitly start it again.
 
-## Cursor setup (v1.0)
+## Cursor setup (v1.1)
 
-Cursor can connect directly to the MCP over Streamable HTTP on a **trusted LAN**.
+The canonical Cursor endpoint is your public HTTPS MCP URL:
 
-Add a server entry to your Cursor MCP configuration (for example `~/.cursor/mcp.json` or project `.cursor/mcp.json`). Use the **URL** transport — no authentication headers are required in v1.0:
+```text
+https://mcp.<your-domain>/mcp
+```
+
+Example `.cursor/mcp.json` (use environment variables for credentials — never commit secrets):
 
 ```json
 {
   "mcpServers": {
     "hellozen": {
-      "url": "http://192.168.50.234:8790/mcp"
+      "url": "https://mcp.example.com/mcp",
+      "auth": {
+        "CLIENT_ID": "${env:HELLOZEN_MCP_CURSOR_CLIENT_ID}",
+        "CLIENT_SECRET": "${env:HELLOZEN_MCP_CURSOR_CLIENT_SECRET}",
+        "scopes": ["hellozen.read"]
+      }
     }
   }
 }
 ```
 
-Replace `192.168.50.234` with the LAN address of the host running `hellozen-mcp`. That address is **deployment-specific** — it is shown here only as the current Vision host example, not as a portable default.
+Register redirect URIs on your authorization server per current Cursor docs:
 
-Before relying on Cursor:
+- Desktop: `http://localhost:8787/callback`
+- Cursor web/agents: `https://www.cursor.com/agents/mcp/oauth/callback`
 
-1. Start the MCP container: `docker compose start hellozen-mcp`
-2. Confirm health from a machine that can reach the host:
+Full setup: [docs/oauth-and-deployment.md](docs/oauth-and-deployment.md)
 
-```bash
-curl -fsS http://<host-lan-ip>:8790/healthz && echo
-```
+### v1.0 rollback (unauthenticated LAN)
 
-Cursor direct access requires Docker (or the Node process) to publish port `8790` on an interface reachable from your workstation — see [Docker networking](#docker-networking-v10).
+Tag `v1.0.0` supported direct LAN HTTP without OAuth. That pattern is no longer the v1.1 default.
 
-## ChatGPT setup (v1.0)
+## ChatGPT setup (v1.1)
 
-ChatGPT connects through the **OpenAI Secure MCP Tunnel**. High-level operator sequence:
+ChatGPT continues to use the **OpenAI Secure MCP Tunnel** with **OAuth** at the MCP layer. Do not point ChatGPT at the Cloudflare public hostname.
+
+High-level operator sequence:
 
 ```text
-1. Start hellozen-mcp
-2. Verify MCP health (/healthz)
+1. Configure OAuth env vars and start hellozen-mcp
+2. Verify MCP health (/healthz) and 401 on unauthenticated /mcp
 3. Start the OpenAI tunnel-client on the Vision host
-4. Point the tunnel upstream at an MCP address reachable from that host
-5. Verify tunnel readiness (/readyz on the tunnel health port)
-6. Configure the ChatGPT custom MCP app (Tunnel connection, no authentication)
+4. Point tunnel upstream at a reachable MCP address (127.0.0.1:8790 vs LAN IP mismatch causes 502)
+5. Verify tunnel readiness (/readyz)
+6. Configure ChatGPT custom MCP: Tunnel connection + OAuth client
+7. Complete browser OAuth when prompted (scope: hellozen.read)
 ```
 
-**Full setup guide:** [docs/connecting-to-chatgpt.md](docs/connecting-to-chatgpt.md)
+**Full guides:**
+
+- [docs/connecting-to-chatgpt.md](docs/connecting-to-chatgpt.md) — tunnel operations
+- [docs/oauth-and-deployment.md](docs/oauth-and-deployment.md) — OAuth + ChatGPT reconnection steps
 
 Useful verification commands (replace addresses as appropriate):
 

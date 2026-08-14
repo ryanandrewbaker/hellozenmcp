@@ -54,6 +54,9 @@ describe('repository artifact security', () => {
   it('keeps .env.example versioned and present', () => {
     const envExample = readRepoFile('.env.example');
     expect(envExample).toContain('HELLOZEN_MCP_READONLY_TOKEN=');
+    expect(envExample).toContain('HELLOZEN_MCP_AUTH_ENABLED=');
+    expect(envExample).toContain('HELLOZEN_MCP_RESOURCE_URL=');
+    expect(envExample).toContain('HELLOZEN_MCP_OAUTH_ISSUER=');
     expect(envExample).not.toMatch(/pit-[a-z0-9-]+/i);
   });
 
@@ -108,14 +111,17 @@ describe('repository artifact security', () => {
     expect(security).toMatch(/STOPPED/i);
   });
 
-  it('includes ChatGPT connection field guide and backlog', () => {
+  it('includes OAuth deployment guide and backlog', () => {
+    const oauthGuide = readRepoFile('docs/oauth-and-deployment.md');
     const fieldGuide = readRepoFile('docs/connecting-to-chatgpt.md');
     const backlog = readRepoFile('docs/BACKLOG.md');
     const changelog = readRepoFile('CHANGELOG.md');
 
+    expect(oauthGuide).toContain('OAuth');
+    expect(oauthGuide).toContain('Cloudflare Tunnel');
     expect(fieldGuide).toContain('Secure MCP Tunnel');
-    expect(fieldGuide).toContain('restart: "no"');
-    expect(backlog.toLowerCase()).toContain('oauth');
+    expect(backlog).toContain('v1.1');
+    expect(changelog).toContain('1.1.0');
     expect(changelog).toContain('1.0.0');
   });
 });

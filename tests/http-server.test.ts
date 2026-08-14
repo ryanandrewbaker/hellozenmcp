@@ -2,6 +2,7 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { ReadOnlyHelloZenClient } from '../src/hellozen/client.js';
 import { createApp } from '../src/http/app.js';
+import { createDisabledTestAuth } from './helpers/oauth-fixtures.js';
 import { createFakeFetch, TEST_CONFIG } from './helpers/fake-fetch.js';
 
 describe('HTTP server', () => {
@@ -9,7 +10,7 @@ describe('HTTP server', () => {
     ...TEST_CONFIG,
     fetchImpl: createFakeFetch(),
   });
-  const app = createApp({ client });
+  const app = createApp({ client, auth: createDisabledTestAuth() });
 
   it('returns health without environment details', async () => {
     const response = await request(app).get('/healthz');

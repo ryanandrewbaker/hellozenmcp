@@ -4,6 +4,35 @@ All notable changes to HelloZen Read-Only MCP are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - Unreleased
+
+### Added
+
+- OAuth 2.1 protected MCP resource server (`/mcp` requires bearer tokens)
+- `hellozen.read` scope enforcement for all four tools
+- JWT access-token validation via authorization-server JWKS (`jose`)
+- RFC 9728 protected-resource metadata and `WWW-Authenticate` challenges
+- SDK integration: `requireBearerAuth`, `mcpAuthMetadataRouter`, `OAuthTokenVerifier`
+- Fail-closed OAuth configuration validation at startup
+- Explicit test-only auth disable gate (`HELLOZEN_MCP_ALLOW_AUTH_DISABLED`)
+- Tool OAuth metadata via `_meta.securitySchemes`
+- Cloudflare Tunnel optional Compose profile (`compose.cloudflare.yml`)
+- Comprehensive OAuth security tests (64 total tests)
+- [docs/oauth-and-deployment.md](docs/oauth-and-deployment.md) — architecture, Cursor/ChatGPT setup, troubleshooting
+
+### Changed
+
+- Cursor canonical endpoint is HTTPS via Cloudflare Tunnel (not unauthenticated LAN)
+- ChatGPT path unchanged (OpenAI Secure MCP Tunnel) but now requires OAuth at MCP layer
+- Docker Compose adds private `hellozen-mcp-net` network for `cloudflared` origin routing
+- Loopback binding `127.0.0.1:8790:8790` preserved for OpenAI tunnel compatibility
+
+### Security
+
+- No auth bypass by network path (LAN, Cloudflare, or OpenAI tunnel)
+- No Cloudflare Access — single OAuth authorization model
+- `HELLOZEN_MCP_READONLY_TOKEN` remains server-side only
+
 ## [1.0.0] - 2026-08-14
 
 ### HelloZen MCP 1.0 — baseline release
