@@ -138,6 +138,10 @@ The `opportunities.readonly` scope is relatively broad in HighLevel because it c
 - A HelloZen sub-account location ID
 - A read-only Private Integration token
 
+## Tested against
+- ChatGPT MCP connectivity using internal OpenAI Tunnel
+- Cursor local unauthenticated local network access
+
 ## Local development
 
 ```bash
