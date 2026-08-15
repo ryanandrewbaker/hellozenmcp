@@ -92,6 +92,23 @@ describe('normalizers', () => {
     expect(JSON.stringify(output)).not.toContain('teamMembers');
   });
 
+  it('normalizes calendars with object-shaped openHours', () => {
+    const payload = {
+      calendars: [
+        {
+          id: 'cal_obj_hours',
+          name: 'Portrait Planning Call',
+          slotDuration: 30,
+          isActive: true,
+          openHours: { monday: [{ open: '09:00', close: '17:00' }] },
+        },
+      ],
+    };
+    const calendars = normalizeCalendars(payload);
+    expect(calendars).toHaveLength(1);
+    expect(calendars[0]?.name).toBe('Portrait Planning Call');
+  });
+
   it('normalizes workflows', () => {
     const output = listWorkflowsOutputSchema.parse({
       workflows: normalizeWorkflows(workflows),

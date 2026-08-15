@@ -51,7 +51,7 @@ export const upstreamCalendarSchema = z.object({
   postBuffer: z.number().optional(),
   appointmentPerSlot: z.number().optional(),
   appointmentPerDay: z.number().optional(),
-  openHours: z.array(z.unknown()).optional(),
+  openHours: z.unknown().optional(),
   notifications: z.array(z.unknown()).optional(),
 });
 

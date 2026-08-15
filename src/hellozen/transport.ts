@@ -139,6 +139,12 @@ export class ReadOnlyHelloZenTransport {
         'access_denied',
       );
     }
+    if (status === 422) {
+      return new HelloZenError(
+        'HelloZen rejected the request. Users search may require HELLOZEN_MCP_COMPANY_ID in .env.',
+        'invalid_response',
+      );
+    }
     return new HelloZenError(
       HELLOZEN_ERROR_MESSAGES.invalidResponse,
       'invalid_response',
