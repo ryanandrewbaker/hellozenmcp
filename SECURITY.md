@@ -44,9 +44,10 @@ The HelloZen credential scope `opportunities.readonly` is relatively broad at th
 
 ### Deployment
 
-- Keep the MCP server private; access via OpenAI Secure MCP Tunnel or equivalent
-- Do not expose the MCP HTTP port on a public network interface without an approved authentication layer
-- Bind to loopback (`127.0.0.1`) for initial deployment unless using a private Docker network
+- Keep the MCP server private; access via trusted LAN and/or OpenAI Secure MCP Tunnel only
+- **There is no public HelloZen MCP endpoint** — do not port-forward TCP 8790
+- Publish on loopback by default; use a specific private LAN IP (`HELLOZEN_MCP_PUBLISH_HOST`) when Cursor on another machine must reach the host
+- Do not set publish host to `0.0.0.0`
 
 ### On-demand availability
 
@@ -56,14 +57,14 @@ Although this connector is read-only, uses narrowly scoped credentials, binds it
 
 Docker Compose is configured with `restart: "no"` so the service does not automatically start after a host reboot, Docker daemon restart, or container exit. The normal resting state is **STOPPED**.
 
-### v1.0 access model
+### Access model
 
-Version 1.0 supports:
+HelloZen MCP supports two private client paths only:
 
-- **Cursor** — direct Streamable HTTP over a trusted LAN
-- **ChatGPT** — OpenAI Secure MCP Tunnel to a private MCP endpoint
+- **Cursor** — Streamable HTTP over a trusted private LAN
+- **ChatGPT** — OpenAI Secure MCP Tunnel to the same private MCP listener
 
-Version 1.0 does **not** provide OAuth authentication or a general public HTTPS MCP endpoint. Future releases may add Cloudflare Tunnel and OAuth 2.1 (see [docs/BACKLOG.md](docs/BACKLOG.md)).
+There is **no** OAuth layer, no public HTTPS MCP endpoint, and no intended Internet route to TCP 8790. Authenticated or public access is deferred unless requirements change (see [docs/BACKLOG.md](docs/BACKLOG.md)).
 
 The LAN HTTP endpoint must not be treated as safe for untrusted networks or public Internet exposure.
 

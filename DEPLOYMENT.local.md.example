@@ -7,21 +7,23 @@
 # Create .env on Vision only (never in Git):
 # /mnt/user/devconcepts/hellozenmcp/.env
 #
-# On-demand lifecycle:
+# Trusted-LAN publish (Cursor + tunnel-client share one MCP endpoint):
 #
-#   build/create
-#       ↓
-#   STOPPED normally
-#       ↓
-#   operator starts MCP
-#       ↓
-#   health check
-#       ↓
-#   Secure MCP Tunnel / ChatGPT session
-#       ↓
-#   operator stops MCP
-#       ↓
-#   STOPPED
+#   HELLOZEN_MCP_PUBLISH_HOST=192.168.50.234
+#
+# Cursor mcp.json:
+#   http://192.168.50.234:8790/mcp
+#
+# tunnel-client hellozen.yaml upstream:
+#   http://192.168.50.234:8790/mcp
+#
+# Do not port-forward TCP 8790. There is no public HelloZen MCP endpoint.
+#
+# On-demand lifecycle (preferred):
+#
+#   ./scripts/hellozen-session start
+#   ./scripts/hellozen-session status
+#   ./scripts/hellozen-session stop
 #
 # Initial build (Vision: Buildx 0.15.1 — use docker build, not compose build):
 #
@@ -29,16 +31,9 @@
 #   docker build --pull -t hellozenmcp-hellozen-mcp .
 #   docker compose up -d --no-build hellozen-mcp
 #
-# Check state:
-#   docker compose ps
-#
-# Start existing container:
+# Manual MCP only (without session wrapper):
 #   docker compose start hellozen-mcp
-#
-# Confirm healthy:
-#   curl -fsS http://127.0.0.1:8790/healthz && echo
-#
-# Stop after session (preferred — preserves container for next start):
+#   curl -fsS http://192.168.50.234:8790/healthz && echo
 #   docker compose stop hellozen-mcp
 #
 # Compose uses restart: "no" — Vision/Docker reboot does not auto-start the connector.

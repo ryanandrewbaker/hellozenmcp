@@ -54,6 +54,7 @@ describe('repository artifact security', () => {
   it('keeps .env.example versioned and present', () => {
     const envExample = readRepoFile('.env.example');
     expect(envExample).toContain('HELLOZEN_MCP_READONLY_TOKEN=');
+    expect(envExample).toContain('HELLOZEN_MCP_PUBLISH_HOST=');
     expect(envExample).not.toMatch(/pit-[a-z0-9-]+/i);
   });
 
@@ -79,13 +80,15 @@ describe('repository artifact security', () => {
     ]);
   });
 
-  it('keeps compose on-demand with loopback binding and hardened runtime', () => {
+  it('keeps compose on-demand with parameterized loopback default and hardened runtime', () => {
     const compose = readRepoFile('compose.yml');
 
     expect(compose).toMatch(/restart:\s*["']?no["']?/);
     expect(compose).not.toMatch(/restart:\s*always/);
     expect(compose).not.toMatch(/restart:\s*unless-stopped/);
-    expect(compose).toContain('127.0.0.1:8790:8790');
+    expect(compose).toContain(
+      '${HELLOZEN_MCP_PUBLISH_HOST:-127.0.0.1}:8790:8790',
+    );
     expect(compose).not.toContain('0.0.0.0:8790');
     expect(compose).toContain('read_only: true');
     expect(compose).toContain('cap_drop:');
@@ -102,20 +105,27 @@ describe('repository artifact security', () => {
     expect(readme).toContain('docker compose start hellozen-mcp');
     expect(readme).toContain('docker compose stop hellozen-mcp');
     expect(readme).toContain('restart: "no"');
+    expect(readme).toContain('hellozen-session');
 
     expect(security.toLowerCase()).toContain('on-demand');
     expect(security.toLowerCase()).toContain('defence in depth');
     expect(security).toMatch(/STOPPED/i);
+    expect(security).toContain('port-forward');
   });
 
-  it('includes ChatGPT connection field guide and backlog', () => {
+  it('includes session script, ChatGPT field guide, and private backlog', () => {
+    const sessionScript = readRepoFile('scripts/hellozen-session');
     const fieldGuide = readRepoFile('docs/connecting-to-chatgpt.md');
     const backlog = readRepoFile('docs/BACKLOG.md');
     const changelog = readRepoFile('CHANGELOG.md');
 
+    expect(sessionScript).toContain('cmd_status');
+    expect(sessionScript).toContain('list_owned_pids');
     expect(fieldGuide).toContain('Secure MCP Tunnel');
-    expect(fieldGuide).toContain('restart: "no"');
-    expect(backlog.toLowerCase()).toContain('oauth');
+    expect(fieldGuide).toContain('hellozen-session');
+    expect(backlog.toLowerCase()).toContain('deferred');
+    expect(backlog).toContain('feat/oauth-cloudflare-ingress');
     expect(changelog).toContain('1.0.0');
+    expect(changelog).toContain('1.1.0');
   });
 });

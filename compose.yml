@@ -14,7 +14,7 @@ services:
     env_file:
       - .env
     ports:
-      - "127.0.0.1:8790:8790"
+      - "${HELLOZEN_MCP_PUBLISH_HOST:-127.0.0.1}:8790:8790"
     logging:
       driver: json-file
       options:

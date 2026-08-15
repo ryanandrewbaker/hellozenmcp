@@ -1,0 +1,290 @@
+#!/usr/bin/env bash
+# Operator lifecycle for on-demand HelloZen MCP + OpenAI Secure MCP Tunnel.
+# Safe output only — never prints secrets, .env, or tunnel config contents.
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+if [[ -f .env && -r .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+PUBLISH_HOST="${HELLOZEN_MCP_PUBLISH_HOST:-127.0.0.1}"
+MCP_PORT="${HELLOZEN_MCP_PORT:-8790}"
+TUNNEL_RUNTIME_DIR="${TUNNEL_RUNTIME_DIR:-.runtime/tunnel-client}"
+TUNNEL_CONFIG="${TUNNEL_CONFIG:-$TUNNEL_RUNTIME_DIR/hellozen.yaml}"
+TUNNEL_READY_URL="${TUNNEL_READY_URL:-http://127.0.0.1:8791/readyz}"
+MCP_HEALTH_URL="http://${PUBLISH_HOST}:${MCP_PORT}/healthz"
+MCP_MCP_URL="http://${PUBLISH_HOST}:${MCP_PORT}/mcp"
+STATE_FILE="$TUNNEL_RUNTIME_DIR/session.pid"
+TUNNEL_CLIENT="$TUNNEL_RUNTIME_DIR/tunnel-client"
+TUNNEL_LOG="$TUNNEL_RUNTIME_DIR/tunnel.log"
+HEALTH_TIMEOUT_SEC="${HELLOZEN_SESSION_HEALTH_TIMEOUT_SEC:-30}"
+TUNNEL_START_TIMEOUT_SEC="${HELLOZEN_SESSION_TUNNEL_TIMEOUT_SEC:-45}"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/hellozen-session <command>
+
+Commands:
+  status   Report MCP and tunnel state (no secrets)
+  start    Start MCP if needed, then tunnel if not already ready
+  stop     Stop tunnel (owned processes only), then MCP container
+  doctor   Run tunnel-client doctor when installed
+
+Environment (from .env or shell):
+  HELLOZEN_MCP_PUBLISH_HOST   Host publish address (default 127.0.0.1)
+  TUNNEL_RUNTIME_DIR          Default .runtime/tunnel-client
+  TUNNEL_CONFIG               Default $TUNNEL_RUNTIME_DIR/hellozen.yaml
+EOF
+}
+
+die() {
+  echo "hellozen-session: $*" >&2
+  exit 1
+}
+
+validate_publish_host() {
+  if [[ "$PUBLISH_HOST" == "0.0.0.0" ]]; then
+    die 'HELLOZEN_MCP_PUBLISH_HOST must not be 0.0.0.0'
+  fi
+}
+
+runtime_dir_abs() {
+  if [[ -d "$TUNNEL_RUNTIME_DIR" ]]; then
+    (cd "$TUNNEL_RUNTIME_DIR" && pwd)
+  fi
+}
+
+process_executable() {
+  local pid=$1
+  if [[ -r "/proc/$pid/exe" ]]; then
+    readlink -f "/proc/$pid/exe" 2>/dev/null || readlink "/proc/$pid/exe" 2>/dev/null || true
+  fi
+}
+
+is_owned_pid() {
+  local pid=$1
+  local runtime_abs exe
+  runtime_abs="$(runtime_dir_abs)" || return 1
+  [[ -n "$runtime_abs" ]] || return 1
+  exe="$(process_executable "$pid")"
+  [[ -n "$exe" ]] && [[ "$exe" == "$runtime_abs/"* ]]
+}
+
+list_owned_pids() {
+  local runtime_abs pid exe name
+  runtime_abs="$(runtime_dir_abs)" || return 0
+  [[ -n "$runtime_abs" ]] || return 0
+
+  for name in tunnel-client cloudflared; do
+    for pid in $(pgrep -x "$name" 2>/dev/null || true); do
+      if is_owned_pid "$pid"; then
+        echo "$pid"
+      fi
+    done
+  done | sort -u
+}
+
+curl_ok() {
+  local url=$1
+  curl -fsS --max-time 3 "$url" >/dev/null 2>&1
+}
+
+mcp_container_state() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "unknown"
+    return
+  fi
+  local line
+  line="$(docker compose ps hellozen-mcp --format '{{.State}}' 2>/dev/null | head -1 || true)"
+  if [[ -z "$line" ]]; then
+    echo "stopped"
+  else
+    echo "$line" | tr '[:upper:]' '[:lower:]'
+  fi
+}
+
+mcp_health_label() {
+  local container_state
+  container_state="$(mcp_container_state)"
+  if [[ "$container_state" != "running" ]]; then
+    echo "stopped"
+    return
+  fi
+  if curl_ok "$MCP_HEALTH_URL"; then
+    echo "healthy"
+  else
+    echo "unhealthy"
+  fi
+}
+
+tunnel_health_label() {
+  if curl_ok "$TUNNEL_READY_URL"; then
+    echo "ready"
+    return
+  fi
+  if [[ -n "$(list_owned_pids || true)" ]]; then
+    echo "unhealthy"
+  else
+    echo "stopped"
+  fi
+}
+
+print_status() {
+  local mcp tunnel
+  mcp="$(mcp_health_label)"
+  tunnel="$(tunnel_health_label)"
+  echo "MCP: $mcp (${MCP_HEALTH_URL})"
+  echo "Tunnel: $tunnel (${TUNNEL_READY_URL})"
+  echo "MCP endpoint: ${MCP_MCP_URL}"
+}
+
+wait_for_url() {
+  local url=$1
+  local timeout=$2
+  local elapsed=0
+  while (( elapsed < timeout )); do
+    if curl_ok "$url"; then
+      return 0
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  return 1
+}
+
+ensure_mcp_running() {
+  local state
+  state="$(mcp_health_label)"
+  if [[ "$state" == "healthy" ]]; then
+    return 0
+  fi
+
+  command -v docker >/dev/null 2>&1 || die 'docker is required'
+
+  local container_state
+  container_state="$(mcp_container_state)"
+  if [[ "$container_state" == "running" ]]; then
+    echo "MCP container running but health check failed (${MCP_HEALTH_URL})" >&2
+    return 1
+  fi
+
+  if docker compose ps -a hellozen-mcp --format '{{.Name}}' 2>/dev/null | grep -q hellozen-mcp; then
+    docker compose start hellozen-mcp
+  else
+    docker compose up -d --no-build hellozen-mcp
+  fi
+
+  if wait_for_url "$MCP_HEALTH_URL" "$HEALTH_TIMEOUT_SEC"; then
+    return 0
+  fi
+  die "MCP did not become healthy within ${HEALTH_TIMEOUT_SEC}s"
+}
+
+warn_tunnel_upstream_mismatch() {
+  [[ -f "$TUNNEL_CONFIG" ]] || return 0
+  if grep -q "127.0.0.1:${MCP_PORT}" "$TUNNEL_CONFIG" 2>/dev/null \
+    && [[ "$PUBLISH_HOST" != "127.0.0.1" ]]; then
+    echo "warning: tunnel config may still reference 127.0.0.1 — expected ${MCP_MCP_URL}" >&2
+  fi
+}
+
+start_tunnel() {
+  if curl_ok "$TUNNEL_READY_URL"; then
+    echo "Tunnel: ready (already running)"
+    return 0
+  fi
+
+  local owned
+  owned="$(list_owned_pids || true)"
+  if [[ -n "$owned" ]]; then
+    die "tunnel processes already exist but /readyz is not healthy — run doctor or stop first"
+  fi
+
+  [[ -x "$TUNNEL_CLIENT" ]] || die "tunnel-client not found at $TUNNEL_CLIENT"
+  [[ -f "$TUNNEL_CONFIG" ]] || die "tunnel config not found at $TUNNEL_CONFIG"
+
+  warn_tunnel_upstream_mismatch
+  mkdir -p "$TUNNEL_RUNTIME_DIR"
+
+  nohup "$TUNNEL_CLIENT" run --config "$TUNNEL_CONFIG" >>"$TUNNEL_LOG" 2>&1 &
+  echo "$!" >"$STATE_FILE"
+
+  if wait_for_url "$TUNNEL_READY_URL" "$TUNNEL_START_TIMEOUT_SEC"; then
+    echo "Tunnel: ready"
+    return 0
+  fi
+  die "tunnel /readyz did not become healthy within ${TUNNEL_START_TIMEOUT_SEC}s"
+}
+
+stop_owned_tunnel() {
+  local pids pid
+  pids="$(list_owned_pids || true)"
+  if [[ -z "$pids" ]]; then
+    return 0
+  fi
+
+  while read -r pid; do
+    [[ -n "$pid" ]] || continue
+    kill -TERM "$pid" 2>/dev/null || true
+  done <<<"$pids"
+
+  local elapsed=0
+  while (( elapsed < 15 )); do
+    if ! curl_ok "$TUNNEL_READY_URL" && [[ -z "$(list_owned_pids || true)" ]]; then
+      rm -f "$STATE_FILE"
+      return 0
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  die 'tunnel did not stop cleanly — inspect owned tunnel-client/cloudflared processes manually'
+}
+
+cmd_status() {
+  validate_publish_host
+  print_status
+}
+
+cmd_start() {
+  validate_publish_host
+  ensure_mcp_running
+  start_tunnel
+  print_status
+}
+
+cmd_stop() {
+  validate_publish_host
+  stop_owned_tunnel
+  if command -v docker >/dev/null 2>&1; then
+    docker compose stop hellozen-mcp 2>/dev/null || true
+  fi
+  print_status
+}
+
+cmd_doctor() {
+  validate_publish_host
+  [[ -x "$TUNNEL_CLIENT" ]] || die "tunnel-client not found at $TUNNEL_CLIENT"
+  [[ -f "$TUNNEL_CONFIG" ]] || die "tunnel config not found at $TUNNEL_CONFIG"
+  "$TUNNEL_CLIENT" doctor --config "$TUNNEL_CONFIG" --explain
+}
+
+main() {
+  local cmd=${1:-}
+  case "$cmd" in
+    status) cmd_status ;;
+    start) cmd_start ;;
+    stop) cmd_stop ;;
+    doctor) cmd_doctor ;;
+    -h|--help|help|'') usage ;;
+    *) die "unknown command: $cmd (try --help)" ;;
+  esac
+}
+
+main "$@"

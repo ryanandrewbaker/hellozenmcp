@@ -1,6 +1,6 @@
 # HelloZen Read-Only MCP
 
-**HelloZen MCP 1.0** — first stable baseline release. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+**HelloZen MCP 1.0** is the stable baseline (`v1.0.0`). Private operations improvements for 1.1 are in development — see [CHANGELOG.md](CHANGELOG.md).
 
 An unofficial, self-hosted, strictly read-only MCP connector designed for inspecting HelloZen configuration.
 
@@ -28,29 +28,30 @@ It does **not** access contacts, conversations, appointments, opportunity record
 ## Architecture
 
 ```text
-MCP client
-     ↓
-Streamable HTTP (/mcp)
-     ↓
-Express + MCP server
-     ↓
-Read-only MCP tools (×4)
-     ↓
-ReadOnlyHelloZenClient
-     ↓
-GET-only transport
-     ↓
-LeadConnector / HelloZen API
+                 trusted private LAN (no Internet route to MCP)
+
+Cursor (workstation) ──────────────────────┐
+                                           ▼
+                              http://<host>:8790/mcp
+                                           ▲
+ChatGPT ──► OpenAI Secure MCP Tunnel ──► tunnel-client (private host)
+                                           │
+                                           ▼
+                              hellozen-mcp (Docker, on-demand)
+                                           │
+                              server-side read-only token
+                                           ▼
+                                   HelloZen API (GET only)
 ```
 
-### v1.0 client paths
+**There is no public HelloZen MCP endpoint. Do not port-forward TCP 8790.**
 
-Version 1.0 supports two proven connection patterns:
+### Client paths
 
-**Cursor — direct LAN HTTP**
+**Cursor — trusted private LAN**
 
 ```text
-Cursor (trusted LAN)
+Cursor
    ↓
 http://<host-lan-ip>:8790/mcp
    ↓
@@ -71,7 +72,9 @@ http://<reachable-mcp-address>:8790/mcp
 hellozen-mcp
 ```
 
-v1.0 does **not** provide a general authenticated public MCP endpoint. Future work may add Cloudflare Tunnel and OAuth 2.1 for a canonical HTTPS endpoint — see [docs/BACKLOG.md](docs/BACKLOG.md). That is **not** part of v1.0.
+On a typical Vision deployment, Cursor and `tunnel-client` use the **same** private host address (`HELLOZEN_MCP_PUBLISH_HOST`). Both clients may stay connected to one running MCP listener concurrently.
+
+This connector does **not** provide a public MCP endpoint, OAuth resource server, or general Internet-facing API.
 
 ## Security model (v1.0)
 
@@ -201,11 +204,13 @@ docker compose up -d --no-build hellozen-mcp
 
 On hosts where `docker compose build` works (Buildx >= 0.17.0), you may use `docker compose up -d --build` instead of the two-step build above.
 
-The default compose file binds to loopback only:
+The default compose file publishes on loopback only via `HELLOZEN_MCP_PUBLISH_HOST` (default `127.0.0.1`):
 
+```text
+${HELLOZEN_MCP_PUBLISH_HOST:-127.0.0.1}:8790:8790
 ```
-127.0.0.1:8790:8790
-```
+
+Set `HELLOZEN_MCP_PUBLISH_HOST` in `.env` on the deployment host for trusted-LAN access — do not edit `compose.yml` and do not use `0.0.0.0`.
 
 Docker is configured with `restart: "no"`, so a host or Docker daemon reboot does **not** automatically start the connector.
 
@@ -218,22 +223,31 @@ The MCP connector is intentionally **not** a continuously running service. Its n
 Expected lifecycle:
 
 ```text
-build/create
-    ↓
 STOPPED normally
     ↓
-operator starts MCP
+./scripts/hellozen-session start
     ↓
-health check
+MCP healthy + tunnel ready (when configured)
     ↓
-Secure MCP Tunnel / ChatGPT session
+Cursor and/or ChatGPT inspection session
     ↓
-operator stops MCP
+./scripts/hellozen-session stop
     ↓
 STOPPED
 ```
 
-### Check current state
+### Session commands (recommended)
+
+```bash
+./scripts/hellozen-session status   # MCP + tunnel state, no secrets
+./scripts/hellozen-session start    # start MCP, then tunnel if not ready
+./scripts/hellozen-session stop     # stop owned tunnel, then MCP
+./scripts/hellozen-session doctor   # tunnel-client diagnostics
+```
+
+npm aliases: `npm run session:status`, `session:start`, `session:stop`, `session:doctor`.
+
+### Manual MCP commands
 
 ```bash
 cd /mnt/user/devconcepts/hellozenmcp
@@ -323,35 +337,37 @@ curl -fsS http://127.0.0.1:8791/readyz && echo
 
 The tunnel upstream URL must match an address where the MCP is **actually listening**. A healthy Docker container does not guarantee ChatGPT connectivity if the tunnel points at the wrong interface — see [Troubleshooting](#troubleshooting).
 
-## Docker networking (v1.0)
+## Docker networking
 
-The committed `compose.yml` binds the MCP port to **loopback only**:
+Host publish address (`HELLOZEN_MCP_PUBLISH_HOST`) controls which host interface receives MCP traffic. This is **distinct** from `HELLOZEN_MCP_BIND_HOST` (in-container listen address, default `0.0.0.0`).
 
-```yaml
-ports:
-  - "127.0.0.1:8790:8790"
-```
-
-This is appropriate when:
-
-- only the host-local `tunnel-client` reaches the MCP at `http://127.0.0.1:8790/mcp`, and
-- Cursor is not used from another machine on the LAN
-
-For **Cursor LAN access**, the operator may change the binding to publish on the host LAN address, for example:
+Committed default (safe for local dev and host-only tunnel):
 
 ```yaml
 ports:
-  - "192.168.50.234:8790:8790"
+  - "${HELLOZEN_MCP_PUBLISH_HOST:-127.0.0.1}:8790:8790"
 ```
 
-When that is done, the OpenAI tunnel upstream must use an address that reaches **that** listener — for example `http://192.168.50.234:8790/mcp` — not `http://127.0.0.1:8790/mcp` unless the tunnel process shares the same network namespace as the listener.
+**Vision / trusted LAN** — set in gitignored `.env`:
 
-| Binding | Cursor from LAN | Tunnel upstream `127.0.0.1:8790` |
-|---------|-----------------|-----------------------------------|
-| `127.0.0.1:8790:8790` | No | Yes (host tunnel-client) |
-| `<LAN-IP>:8790:8790` | Yes | Use `<LAN-IP>:8790` instead |
+```text
+HELLOZEN_MCP_PUBLISH_HOST=192.168.50.234
+```
 
-Document binding overrides in gitignored `DEPLOYMENT.local.md`. Do not change `compose.yml` in this repository merely to match a single deployment unless that becomes the agreed default.
+Then use the same endpoint for Cursor and tunnel-client:
+
+```text
+http://192.168.50.234:8790/mcp
+```
+
+| `HELLOZEN_MCP_PUBLISH_HOST` | Cursor from LAN | tunnel-client upstream |
+|-----------------------------|-----------------|------------------------|
+| `127.0.0.1` (default) | No | `http://127.0.0.1:8790/mcp` |
+| `<private LAN IP>` | Yes | `http://<private LAN IP>:8790/mcp` |
+
+**Do not** set publish host to `0.0.0.0`. **Do not** port-forward TCP 8790 to the Internet.
+
+Document deployment-specific values in gitignored `DEPLOYMENT.local.md`.
 
 ## Troubleshooting
 
@@ -390,12 +406,12 @@ Do not expose this service on a public port. Connect via OpenAI Secure MCP Tunne
 
 **Full setup guide:** [docs/connecting-to-chatgpt.md](docs/connecting-to-chatgpt.md) — repository preparation, Docker hardening, on-demand MCP, tunnel-client installation, `doctor` checks, ChatGPT app configuration, and operating procedures.
 
-### Option A — tunnel client on the host
+### Option A — tunnel client on the host (Vision default)
 
-Keep the connector bound to `127.0.0.1:8790`. Configure the tunnel to target:
+Publish MCP on the private LAN IP. Configure the tunnel upstream and Cursor to the **same** URL, for example:
 
-```
-http://127.0.0.1:8790/mcp
+```text
+http://192.168.50.234:8790/mcp
 ```
 
 ### Option B — tunnel client in Docker
@@ -417,7 +433,8 @@ Tunnel setup commands and credentials are configured separately when you deploy 
 | `HELLOZEN_MCP_READONLY_TOKEN` | Read-only Private Integration token |
 | `HELLOZEN_MCP_LOCATION_ID` | HelloZen location ID |
 | `HELLOZEN_MCP_PORT` | HTTP port (default `8790`) |
-| `HELLOZEN_MCP_BIND_HOST` | Bind address (default `0.0.0.0` in container) |
+| `HELLOZEN_MCP_PUBLISH_HOST` | Docker host publish address (default `127.0.0.1`; use private LAN IP on Vision) |
+| `HELLOZEN_MCP_BIND_HOST` | In-container bind address (default `0.0.0.0`) |
 | `HELLOZEN_MCP_REQUEST_TIMEOUT_MS` | Upstream timeout (default `10000`) |
 | `HELLOZEN_MCP_CACHE_TTL_SECONDS` | Configuration cache TTL (default `60`) |
 

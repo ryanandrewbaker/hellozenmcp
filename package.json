@@ -15,7 +15,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify:hellozen": "tsx src/cli/verify-hellozen.ts"
+    "verify:hellozen": "tsx src/cli/verify-hellozen.ts",
+    "session:status": "scripts/hellozen-session status",
+    "session:start": "scripts/hellozen-session start",
+    "session:stop": "scripts/hellozen-session stop",
+    "session:doctor": "scripts/hellozen-session doctor"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

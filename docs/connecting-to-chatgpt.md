@@ -462,11 +462,13 @@ The tunnel ID was likewise supplied locally.
 
 A tunnel config was then created under `.runtime/` and given mode `600`.
 
-The MCP target for the host-based tunnel client was:
+The MCP target for the host-based tunnel client should match `HELLOZEN_MCP_PUBLISH_HOST` on the deployment host. On Vision with LAN publish:
 
 ```text
-http://127.0.0.1:8790/mcp
+http://192.168.50.234:8790/mcp
 ```
+
+Loopback-only publish (`127.0.0.1`) is appropriate when Cursor is not used from another LAN machine.
 
 The health/admin listener was also loopback-only.
 
@@ -785,7 +787,22 @@ The sequence deliberately proves one boundary at a time rather than debugging th
 
 ## 22. Suggested normal operating procedure
 
-### Start an inspection session
+Use the repository session wrapper when available:
+
+```bash
+cd /mnt/user/devconcepts/hellozenmcp
+
+./scripts/hellozen-session start
+./scripts/hellozen-session status
+# … inspection session …
+./scripts/hellozen-session stop
+```
+
+Or npm aliases: `npm run session:start`, `session:status`, `session:stop`.
+
+The wrapper starts MCP if needed, waits for `/healthz`, avoids duplicate tunnel instances when `/readyz` is already healthy, and stops only tunnel processes owned under `.runtime/tunnel-client/`.
+
+### Manual procedure (legacy)
 
 ```bash
 cd /mnt/user/devconcepts/hellozenmcp
@@ -802,7 +819,7 @@ echo $! > .runtime/tunnel-client/tunnel.pid
 Then verify:
 
 ```bash
-curl -fsS http://127.0.0.1:8790/healthz && echo
+curl -fsS http://<publish-host>:8790/healthz && echo
 curl -fsS http://127.0.0.1:8791/readyz && echo
 ```
 
@@ -810,7 +827,11 @@ However, if tunnel startup reports that the tunnel is already in use, **do not r
 
 ### End an inspection session
 
-Stop the tunnel deliberately, taking care to account for its child processes if necessary, then:
+```bash
+./scripts/hellozen-session stop
+```
+
+Or manually stop the tunnel deliberately (owned processes only), then:
 
 ```bash
 docker compose stop hellozen-mcp
@@ -823,7 +844,7 @@ MCP: STOPPED
 Tunnel: STOPPED
 ```
 
-Further work should improve the tunnel stop/start wrapper so process ownership is unambiguous and repeatable.
+Further work on tunnel lifecycle is implemented in `scripts/hellozen-session` for repeatable start/stop without orphaned processes.
 
 ---
 
