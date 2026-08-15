@@ -1,6 +1,6 @@
 # HelloZen Read-Only MCP
 
-**HelloZen MCP 1.0** is the stable baseline (`v1.0.0`). Private operations improvements for 1.1 are in development — see [CHANGELOG.md](CHANGELOG.md).
+**HelloZen MCP 1.1** — private operations release. See [CHANGELOG.md](CHANGELOG.md). Tag `v1.0.0` remains the rollback baseline.
 
 An unofficial, self-hosted, strictly read-only MCP connector designed for inspecting HelloZen configuration.
 
@@ -76,7 +76,7 @@ On a typical Vision deployment, Cursor and `tunnel-client` use the **same** priv
 
 This connector does **not** provide a public MCP endpoint, OAuth resource server, or general Internet-facing API.
 
-## Security model (v1.0)
+## Security model (v1.1)
 
 - HelloZen API access is **read-only** (four fixed `GET` endpoints only)
 - The HelloZen Private Integration token is **server-side only** — never supply it to MCP clients, ChatGPT, or Cursor
@@ -84,8 +84,8 @@ This connector does **not** provide a public MCP endpoint, OAuth resource server
 - Responses are normalized and data-minimized; logs are sanitized
 - Rate limits, concurrency limits, and response size caps are enforced
 - There are **no HelloZen write tools**
-- v1.0 assumes **trusted network or tunnel access** to the MCP HTTP endpoint
-- v1.0 does **not** implement OAuth for arbitrary external MCP clients
+- Assumes **trusted private LAN or OpenAI Secure MCP Tunnel** access to the MCP HTTP endpoint
+- Does **not** implement OAuth or a public Internet-facing MCP endpoint
 - The LAN HTTP endpoint is **not** suitable for public Internet exposure
 
 For on-demand availability and defence-in-depth rationale, see [SECURITY.md](SECURITY.md).
@@ -94,7 +94,7 @@ For on-demand availability and defence-in-depth rationale, see [SECURITY.md](SEC
 
 | Document | Description |
 |----------|-------------|
-| [CHANGELOG.md](CHANGELOG.md) | Release history (v1.0.0 baseline) |
+| [CHANGELOG.md](CHANGELOG.md) | Release history (`v1.1.0`, `v1.0.0` rollback) |
 | [docs/connecting-to-chatgpt.md](docs/connecting-to-chatgpt.md) | Field guide: private MCP → Secure MCP Tunnel → ChatGPT (full setup and operations) |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Planned improvements |
 | [SECURITY.md](SECURITY.md) | Security policy and on-demand availability rationale |
@@ -283,11 +283,11 @@ Use `docker compose stop` for normal shutdown. You do **not** need `docker compo
 
 After a Vision or Docker daemon reboot, the connector remains stopped until you explicitly start it again.
 
-## Cursor setup (v1.0)
+## Cursor setup
 
 Cursor can connect directly to the MCP over Streamable HTTP on a **trusted LAN**.
 
-Add a server entry to your Cursor MCP configuration (for example `~/.cursor/mcp.json` or project `.cursor/mcp.json`). Use the **URL** transport — no authentication headers are required in v1.0:
+Add a server entry to your Cursor MCP configuration (for example `~/.cursor/mcp.json` or project `.cursor/mcp.json`). Use the **URL** transport — no HTTP authentication headers are required:
 
 ```json
 {
@@ -312,7 +312,7 @@ curl -fsS http://<host-lan-ip>:8790/healthz && echo
 
 Cursor direct access requires Docker (or the Node process) to publish port `8790` on an interface reachable from your workstation — see [Docker networking](#docker-networking-v10).
 
-## ChatGPT setup (v1.0)
+## ChatGPT setup
 
 ChatGPT connects through the **OpenAI Secure MCP Tunnel**. High-level operator sequence:
 

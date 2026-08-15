@@ -4,23 +4,29 @@ All notable changes to HelloZen Read-Only MCP are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - Unreleased
+## [1.1.0] - 2026-08-15
 
 ### Added
 
 - `HELLOZEN_MCP_PUBLISH_HOST` for explicit Docker host publish address (default loopback)
 - `scripts/hellozen-session` operator lifecycle (`status`, `start`, `stop`, `doctor`)
+- npm `session:*` scripts wrapping the session helper
 - Documentation aligned with private trusted-LAN + OpenAI Secure MCP Tunnel architecture
 
 ### Changed
 
 - Vision deployments can publish MCP on a private LAN IP without editing committed `compose.yml`
 - Backlog demotes OAuth/public ingress to deferred unless requirements change
+- MCP server version metadata reports `1.1.0`
 
 ### Security
 
 - No public HelloZen MCP endpoint — do not port-forward TCP 8790
 - Session commands avoid printing secrets, tunnel config, or sensitive logs
+
+### Rollback
+
+- `v1.0.0` tag remains available for rollback to the pre-operations baseline
 
 ## [1.0.0] - 2026-08-14
 
@@ -63,5 +69,5 @@ First stable baseline of the read-only HelloZen configuration inspector.
 - No HelloZen mutation or write tools
 - ChatGPT private access relies on the OpenAI Secure MCP Tunnel
 
-[1.1.0]: https://github.com/ryanandrewbaker/hellozenmcp/compare/v1.0.0...v1.1.0
+[1.1.0]: https://github.com/ryanandrewbaker/hellozenmcp/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ryanandrewbaker/hellozenmcp/releases/tag/v1.0.0

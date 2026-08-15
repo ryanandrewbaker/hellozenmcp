@@ -36,7 +36,7 @@ export function buildMcpServer(
 ): McpServer {
   const server = new McpServer({
     name: 'hellozen-mcp',
-    version: '1.0.0',
+    version: '1.1.0',
   });
 
   server.registerTool(

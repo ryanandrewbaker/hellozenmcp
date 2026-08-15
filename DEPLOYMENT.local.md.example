@@ -37,3 +37,24 @@
 #   docker compose stop hellozen-mcp
 #
 # Compose uses restart: "no" — Vision/Docker reboot does not auto-start the connector.
+#
+# --- Upgrade to v1.1.0 (or newer main) ---
+#
+#   cd /mnt/user/devconcepts/hellozenmcp
+#   ./scripts/hellozen-session stop    # if session was running
+#   git fetch origin
+#   git checkout v1.1.0                # or: git pull origin main
+#
+# Add to .env if not already set (use your Vision private LAN IP):
+#   HELLOZEN_MCP_PUBLISH_HOST=192.168.50.234
+#
+# Update tunnel-client hellozen.yaml upstream to match:
+#   http://192.168.50.234:8790/mcp
+#
+# Rebuild image (Vision Buildx 0.15.1 — use docker build, not compose build):
+#   docker build --pull -t hellozenmcp-hellozen-mcp .
+#   docker compose up -d --no-build hellozen-mcp
+#
+# Verify:
+#   ./scripts/hellozen-session status
+#   curl -fsS http://192.168.50.234:8790/healthz && echo

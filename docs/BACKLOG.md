@@ -2,7 +2,7 @@
 
 Planned improvements for HelloZen Read-Only MCP. Items are ordered by priority within each section unless noted otherwise.
 
-**v1.0 baseline is tagged `v1.0.0`.** Post-v1.0 private-operations work is tracked below.
+**v1.0 baseline is tagged `v1.0.0`.** **v1.1.0** adds private host publish configuration and session lifecycle tooling. Items below are post-v1.1 work.
 
 ---
 
@@ -10,17 +10,17 @@ Planned improvements for HelloZen Read-Only MCP. Items are ordered by priority w
 
 ### 1. Private host publish configuration
 
-**Status:** In progress (v1.1)  
-**Priority:** High
+**Status:** Shipped in v1.1.0  
+**Priority:** —
 
-Make Docker host publish address explicit via `HELLOZEN_MCP_PUBLISH_HOST` (default `127.0.0.1`) so trusted-LAN deployments do not require editing committed `compose.yml`.
+`HELLOZEN_MCP_PUBLISH_HOST` (default `127.0.0.1`) in `compose.yml`.
 
 ### 2. MCP + tunnel session lifecycle
 
-**Status:** In progress (v1.1)  
-**Priority:** High
+**Status:** Shipped in v1.1.0  
+**Priority:** —
 
-`scripts/hellozen-session` for repeatable `status` / `start` / `stop` / `doctor` without duplicate `tunnel-client` / bundled `cloudflared` processes. See [connecting-to-chatgpt.md](connecting-to-chatgpt.md) section 18.
+`scripts/hellozen-session` — see [connecting-to-chatgpt.md](connecting-to-chatgpt.md) section 18 for background.
 
 ---
 
