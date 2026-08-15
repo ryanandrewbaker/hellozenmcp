@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Diagnose ChatGPT → tunnel-client → HelloZen MCP tool discovery.
+# Safe output only — no secrets.
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+env_var_from_dotenv() {
+  local name=$1
+  [[ -f .env && -r .env ]] || return 1
+  (
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+    printf '%s' "${!name}"
+  )
+}
+
+PUBLISH_HOST="${HELLOZEN_MCP_PUBLISH_HOST:-$(env_var_from_dotenv HELLOZEN_MCP_PUBLISH_HOST || true)}"
+PUBLISH_HOST="${PUBLISH_HOST:-127.0.0.1}"
+MCP_PORT="${HELLOZEN_MCP_PORT:-$(env_var_from_dotenv HELLOZEN_MCP_PORT || true)}"
+MCP_PORT="${MCP_PORT:-8790}"
+TUNNEL_CONFIG="${TUNNEL_CONFIG:-.runtime/tunnel-client/hellozen.yaml}"
+
+mcp_tools_count() {
+  local base=$1
+  curl -fsS --max-time 10 -X POST "${base}/mcp" \
+    -H 'Content-Type: application/json' \
+    -H 'Accept: application/json, text/event-stream' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+    | grep -o '"name":"[^"]*"' | wc -l | tr -d ' '
+}
+
+mcp_server_version() {
+  local base=$1
+  curl -fsS --max-time 10 -X POST "${base}/mcp" \
+    -H 'Content-Type: application/json' \
+    -H 'Accept: application/json, text/event-stream' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"diag","version":"1.0"}}}' \
+    | grep -o '"version":"[^"]*"' | head -1 || true
+}
+
+health_ok() {
+  curl -fsS --max-time 5 "$1" >/dev/null 2>&1
+}
+
+echo "=== HelloZen MCP ChatGPT path diagnostic ==="
+echo "Publish host: ${PUBLISH_HOST}"
+echo "MCP port: ${MCP_PORT}"
+echo
+
+for label in loopback lan; do
+  if [[ "$label" == "loopback" ]]; then
+    url="http://127.0.0.1:${MCP_PORT}"
+  else
+    url="http://${PUBLISH_HOST}:${MCP_PORT}"
+  fi
+  echo "--- ${label}: ${url} ---"
+  if health_ok "${url}/healthz"; then
+    count="$(mcp_tools_count "$url")"
+    version="$(mcp_server_version "$url")"
+    echo "healthz: ok"
+    echo "tools: ${count} (expect 13 for v2)"
+    echo "server: ${version} (expect version 2.0.0)"
+  else
+    echo "healthz: UNREACHABLE"
+  fi
+  echo
+done
+
+if [[ -f "$TUNNEL_CONFIG" ]]; then
+  echo "--- tunnel config: ${TUNNEL_CONFIG} ---"
+  grep -E 'url:|server_url|listen_addr' "$TUNNEL_CONFIG" || true
+  echo
+else
+  echo "tunnel config not found at ${TUNNEL_CONFIG}"
+  echo
+fi
+
+if curl -fsS --max-time 3 http://127.0.0.1:8791/readyz >/dev/null 2>&1; then
+  echo "tunnel /readyz: ok"
+else
+  echo "tunnel /readyz: not ready"
+fi
+
+echo
+if ! health_ok "http://127.0.0.1:${MCP_PORT}/healthz" && health_ok "http://${PUBLISH_HOST}:${MCP_PORT}/healthz"; then
+  echo "LIKELY ISSUE: MCP is only reachable on ${PUBLISH_HOST}, not 127.0.0.1."
+  echo "tunnel-client defaults to 127.0.0.1 upstream — ChatGPT will not see v2."
+  echo
+  echo "Fix (pick one):"
+  echo "  1. docker compose -f compose.yml -f compose.vision-lan.yml up -d --no-build hellozen-mcp"
+  echo "  2. Set tunnel MCP url to http://${PUBLISH_HOST}:${MCP_PORT}/mcp in ${TUNNEL_CONFIG}"
+  echo "Then: ./scripts/hellozen-session stop && ./scripts/hellozen-session start"
+  echo "Then: create a NEW OpenAI tunnel + NEW ChatGPT connector (tool list may be cached per tunnel)."
+fi

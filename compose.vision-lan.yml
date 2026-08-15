@@ -1,0 +1,12 @@
+# Use when HELLOZEN_MCP_PUBLISH_HOST is a private LAN IP (e.g. Vision).
+#
+#   docker compose -f compose.yml -f compose.vision-lan.yml up -d --no-build hellozen-mcp
+#
+# Publishes MCP on BOTH:
+#   - 127.0.0.1:8790  (tunnel-client default upstream)
+#   - <LAN-IP>:8790   (Cursor from another machine)
+services:
+  hellozen-mcp:
+    ports:
+      - "127.0.0.1:8790:8790"
+      - "${HELLOZEN_MCP_PUBLISH_HOST}:8790:8790"
