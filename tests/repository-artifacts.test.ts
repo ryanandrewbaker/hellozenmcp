@@ -113,6 +113,17 @@ describe('repository artifact security', () => {
     expect(security).toContain('port-forward');
   });
 
+  it('does not source .env into hellozen-session parent environment', () => {
+    const sessionScript = readRepoFile('scripts/hellozen-session');
+
+    expect(sessionScript).not.toMatch(
+      /if \[\[ -f \.env && -r \.env \]\]; then[\s\S]*?^\s*source \.env/m,
+    );
+    expect(sessionScript).toContain('env_var_from_dotenv');
+    expect(sessionScript).toContain('-u HELLOZEN_MCP_READONLY_TOKEN');
+    expect(sessionScript).toContain('-u HELLOZEN_MCP_LOCATION_ID');
+  });
+
   it('includes session script, ChatGPT field guide, and private backlog', () => {
     const sessionScript = readRepoFile('scripts/hellozen-session');
     const fieldGuide = readRepoFile('docs/connecting-to-chatgpt.md');

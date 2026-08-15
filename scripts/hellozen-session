@@ -6,15 +6,31 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-if [[ -f .env && -r .env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
+env_var_from_dotenv() {
+  local name=$1
+  [[ -f .env && -r .env ]] || return 1
+  (
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+    printf '%s' "${!name}"
+  )
+}
+
+if [[ -n "${HELLOZEN_MCP_PUBLISH_HOST:-}" ]]; then
+  PUBLISH_HOST="$HELLOZEN_MCP_PUBLISH_HOST"
+else
+  PUBLISH_HOST="$(env_var_from_dotenv HELLOZEN_MCP_PUBLISH_HOST || true)"
+  PUBLISH_HOST="${PUBLISH_HOST:-127.0.0.1}"
 fi
 
-PUBLISH_HOST="${HELLOZEN_MCP_PUBLISH_HOST:-127.0.0.1}"
-MCP_PORT="${HELLOZEN_MCP_PORT:-8790}"
+if [[ -n "${HELLOZEN_MCP_PORT:-}" ]]; then
+  MCP_PORT="$HELLOZEN_MCP_PORT"
+else
+  MCP_PORT="$(env_var_from_dotenv HELLOZEN_MCP_PORT || true)"
+  MCP_PORT="${MCP_PORT:-8790}"
+fi
 TUNNEL_RUNTIME_DIR="${TUNNEL_RUNTIME_DIR:-.runtime/tunnel-client}"
 TUNNEL_CONFIG="${TUNNEL_CONFIG:-$TUNNEL_RUNTIME_DIR/hellozen.yaml}"
 TUNNEL_READY_URL="${TUNNEL_READY_URL:-http://127.0.0.1:8791/readyz}"
@@ -36,8 +52,9 @@ Commands:
   stop     Stop tunnel (owned processes only), then MCP container
   doctor   Run tunnel-client doctor when installed
 
-Environment (from .env or shell):
+Environment (shell overrides .env for session values only):
   HELLOZEN_MCP_PUBLISH_HOST   Host publish address (default 127.0.0.1)
+  HELLOZEN_MCP_PORT           MCP port (default 8790)
   TUNNEL_RUNTIME_DIR          Default .runtime/tunnel-client
   TUNNEL_CONFIG               Default $TUNNEL_RUNTIME_DIR/hellozen.yaml
 EOF
@@ -212,7 +229,8 @@ start_tunnel() {
   warn_tunnel_upstream_mismatch
   mkdir -p "$TUNNEL_RUNTIME_DIR"
 
-  nohup "$TUNNEL_CLIENT" run --config "$TUNNEL_CONFIG" >>"$TUNNEL_LOG" 2>&1 &
+  nohup env -u HELLOZEN_MCP_READONLY_TOKEN -u HELLOZEN_MCP_LOCATION_ID \
+    "$TUNNEL_CLIENT" run --config "$TUNNEL_CONFIG" >>"$TUNNEL_LOG" 2>&1 &
   echo "$!" >"$STATE_FILE"
 
   if wait_for_url "$TUNNEL_READY_URL" "$TUNNEL_START_TIMEOUT_SEC"; then
@@ -272,7 +290,8 @@ cmd_doctor() {
   validate_publish_host
   [[ -x "$TUNNEL_CLIENT" ]] || die "tunnel-client not found at $TUNNEL_CLIENT"
   [[ -f "$TUNNEL_CONFIG" ]] || die "tunnel config not found at $TUNNEL_CONFIG"
-  "$TUNNEL_CLIENT" doctor --config "$TUNNEL_CONFIG" --explain
+  env -u HELLOZEN_MCP_READONLY_TOKEN -u HELLOZEN_MCP_LOCATION_ID \
+    "$TUNNEL_CLIENT" doctor --config "$TUNNEL_CONFIG" --explain
 }
 
 main() {
