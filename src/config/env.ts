@@ -16,6 +16,7 @@ const tokenSchema = z
 const envSchema = z.object({
   HELLOZEN_MCP_READONLY_TOKEN: tokenSchema,
   HELLOZEN_MCP_LOCATION_ID: locationIdSchema,
+  HELLOZEN_MCP_COMPANY_ID: z.string().min(1).max(64).optional(),
   HELLOZEN_MCP_PORT: z.coerce.number().int().min(1).max(65535).default(8790),
   HELLOZEN_MCP_BIND_HOST: z.string().min(1).default('0.0.0.0'),
   HELLOZEN_MCP_REQUEST_TIMEOUT_MS: z.coerce
@@ -35,6 +36,7 @@ const envSchema = z.object({
 export type AppConfig = {
   readonlyToken: string;
   locationId: string;
+  companyId?: string;
   port: number;
   bindHost: string;
   requestTimeoutMs: number;
@@ -61,6 +63,7 @@ export function loadConfig(
   return {
     readonlyToken: parsed.data.HELLOZEN_MCP_READONLY_TOKEN,
     locationId: parsed.data.HELLOZEN_MCP_LOCATION_ID,
+    companyId: parsed.data.HELLOZEN_MCP_COMPANY_ID,
     port: parsed.data.HELLOZEN_MCP_PORT,
     bindHost: parsed.data.HELLOZEN_MCP_BIND_HOST,
     requestTimeoutMs: parsed.data.HELLOZEN_MCP_REQUEST_TIMEOUT_MS,

@@ -27,7 +27,7 @@ We aim to acknowledge reports within a few business days.
 
 HelloZen Read-Only MCP is a **read-only** connector. It:
 
-- Permits only `GET` requests to four fixed HelloZen configuration endpoints
+- Permits only `GET` requests to an explicit allowlist of HelloZen configuration endpoints (see [docs/configuration-auditor.md](docs/configuration-auditor.md))
 - Does not expose contact, conversation, appointment, or customer data
 - Cannot create, update, or delete HelloZen records through its tool surface
 
@@ -40,7 +40,19 @@ HelloZen Read-Only MCP is a **read-only** connector. It:
 
 ### Residual risk
 
-The HelloZen credential scope `opportunities.readonly` is relatively broad at the API level. This connector restricts itself to the pipelines configuration endpoint only, but a compromised token could still be used outside this connector if it has broader API access. Grant the narrowest scopes possible.
+Recommended read-only scopes for v2.0 auditor coverage:
+
+```
+locations/customFields.readonly
+locations/tags.readonly
+opportunities.readonly
+calendars.readonly
+workflows.readonly
+users.readonly
+forms.readonly
+```
+
+The HelloZen credential scope `opportunities.readonly` is relatively broad at the API level. This connector restricts itself to approved configuration endpoints only, but a compromised token could still be used outside this connector if it has broader API access. Grant the narrowest scopes possible.
 
 ### Deployment
 

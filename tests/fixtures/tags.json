@@ -1,0 +1,6 @@
+{
+  "tags": [
+    { "id": "tag_1", "name": "Active Lead" },
+    { "id": "tag_2", "name": "Booked" }
+  ]
+}

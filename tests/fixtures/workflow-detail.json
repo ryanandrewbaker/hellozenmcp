@@ -1,0 +1,85 @@
+{
+  "workflow": {
+    "id": "wf_detail",
+    "name": "Appointment Status Automation",
+    "status": "published",
+    "createdAt": "2025-01-15T10:00:00.000Z",
+    "updatedAt": "2025-02-01T12:00:00.000Z",
+    "version": 2,
+    "triggers": [
+      {
+        "id": "trg_1",
+        "type": "contact_field_changed",
+        "name": "Appointment Status changed",
+        "filters": [
+          {
+            "field": "contact.appointment_status",
+            "operator": "==",
+            "value": "Booked"
+          }
+        ],
+        "pipelineId": "pipe_1",
+        "stageId": "stage_2"
+      }
+    ],
+    "actions": [
+      {
+        "id": "act_1",
+        "type": "send_email",
+        "subject": "Booking confirmed",
+        "templateId": "tmpl_1",
+        "channel": "email"
+      },
+      {
+        "id": "act_2",
+        "type": "wait",
+        "duration": 3600
+      },
+      {
+        "id": "act_3",
+        "type": "add_tag",
+        "tagName": "Booked"
+      },
+      {
+        "id": "act_4",
+        "type": "update_contact_field",
+        "fieldKey": "contact.appointment_status",
+        "fieldId": "field_contact_1"
+      },
+      {
+        "id": "act_5",
+        "type": "create_task",
+        "userId": "user_1",
+        "title": "Follow up"
+      },
+      {
+        "id": "act_6",
+        "type": "branch",
+        "branches": [
+          {
+            "id": "br_1",
+            "condition": "Has tag Active Lead",
+            "actions": [
+              {
+                "id": "act_7",
+                "type": "remove_tag",
+                "tagName": "Active Lead"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "act_8",
+        "type": "workflow_enrollment",
+        "workflowId": "wf_1"
+      },
+      {
+        "id": "act_9",
+        "type": "calendar",
+        "calendarId": "cal_1"
+      }
+    ],
+    "locationId": "must-not-leak"
+  }
+}

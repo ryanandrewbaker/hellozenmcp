@@ -32,7 +32,7 @@ describe('MCP tools', () => {
     fetchImpl: createFakeFetch(),
   });
 
-  it('advertises exactly four approved tools with correct annotations', async () => {
+  it('advertises approved tools with correct annotations', async () => {
     const tools = await listTools(helloZenClient);
     const names = tools.map((tool) => tool.name).sort();
     expect(names).toEqual([...APPROVED_TOOL_NAMES].sort());
@@ -54,7 +54,7 @@ describe('MCP tools', () => {
     }
   });
 
-  it('returns normalized structured output without secrets', async () => {
+  it('returns normalized structured output with meta and without secrets', async () => {
     const server = buildMcpServer(helloZenClient, new ToolRateLimiter(10_000));
     const [clientTransport, serverTransport] =
       InMemoryTransport.createLinkedPair();
@@ -72,6 +72,8 @@ describe('MCP tools', () => {
     expect(text).not.toContain(TEST_CONFIG.readonlyToken);
     expect(text).not.toContain('traceId');
     expect(text).not.toContain('locationId');
+    expect(text).toMatch(/"meta"/);
+    expect(text).toMatch(/"source"/);
 
     await mcpClient.close();
     await server.close();

@@ -1,0 +1,10 @@
+{
+  "forms": [
+    {
+      "id": "form_1",
+      "name": "Contact Us",
+      "status": "published",
+      "locationId": "loc_example"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # HelloZen Read-Only MCP
 
-**HelloZen MCP 1.1** — private operations release (`v1.1.1` latest). See [CHANGELOG.md](CHANGELOG.md). Tag `v1.0.0` remains the rollback baseline.
+**HelloZen MCP 2.0** — configuration auditor release (`v2.0.0` on branch `feat/configuration-auditor`). See [CHANGELOG.md](CHANGELOG.md) and [docs/configuration-auditor.md](docs/configuration-auditor.md). Tag `v1.1.1` remains the prior stable baseline.
 
 An unofficial, self-hosted, strictly read-only MCP connector designed for inspecting HelloZen configuration.
 
@@ -14,14 +14,25 @@ Use this connector with **Cursor** (trusted LAN), **ChatGPT** (via OpenAI Secure
 
 A small read-only Model Context Protocol server that exposes selected HelloZen / LeadConnector **configuration** data to trusted AI clients. The HelloZen Private Integration token remains on the server; MCP clients never receive it.
 
-Exposes exactly four MCP tools:
+Exposes **13 read-only MCP tools** (four original inventory tools preserved, plus auditor tools):
 
 | Tool | Returns |
 |------|---------|
-| `list_custom_fields` | Field definitions (`id`, `name`, `fieldKey`, `model`, `dataType`, `picklistOptions`) for contact and/or opportunity models — not field values stored on records |
-| `list_pipelines` | Pipeline names and stage configuration (`id`, `name`, `position`) — not opportunity records |
-| `list_calendars` | Calendar configuration metadata (`id`, `name`, `description`, `duration`, `status`, `timezone`, `groupId`) — not appointments or availability |
-| `list_workflows` | Workflow IDs, names, and status — not enrolments, execution history, or step content |
+| `list_custom_fields` | Field definitions (`id`, `name`, `fieldKey`, `model`, `dataType`, `picklistOptions`) — not field values on records |
+| `list_pipelines` | Pipeline names and stage configuration — not opportunity records |
+| `list_calendars` | Calendar inventory metadata — not appointments |
+| `list_workflows` | Workflow IDs, names, and status — not enrolments or execution history |
+| `list_tags` | Tag inventory for dependency resolution |
+| `list_users` | Team member display names for configuration resolution (no emails) |
+| `list_forms` | Form inventory only — no submissions |
+| `get_workflow` | Workflow detail + dependency graph when supported by upstream API |
+| `get_calendar` | Calendar configuration + availability schedule when exposed |
+| `audit_configuration_dependencies` | Reverse-reference index across scanned configuration |
+| `audit_configuration` | Structural audit: duplicates, broken refs, legacy candidates |
+| `get_configuration_snapshot` | Machine-readable configuration export |
+| `get_capabilities` | Visibility matrix and API coverage report |
+
+Every tool response includes freshness metadata (`meta.source`, `meta.fetchedAt`, `meta.cacheAgeMs`). Pass `fresh: true` to bypass cache. See [docs/configuration-auditor.md](docs/configuration-auditor.md).
 
 It does **not** access contacts, conversations, appointments, opportunity records, emails, form submissions, calendar events, or workflow enrolments.
 

@@ -1,10 +1,12 @@
 import {
+  assertPermittedQueryParams,
+  buildHelloZenRequestUrl,
+  getApiVersionForRequest,
   HELLOZEN_API_ORIGIN,
-  HELLOZEN_API_VERSION,
+  isPermittedHelloZenUrl,
   MAX_UPSTREAM_RESPONSE_BYTES,
-  buildHelloZenUrl,
-  type HelloZenReadEndpoint,
-} from './endpoints.js';
+  type HelloZenReadRequest,
+} from './api-registry.js';
 import {
   HELLOZEN_ERROR_MESSAGES,
   HelloZenError,
@@ -23,6 +25,7 @@ const REJECTED_METHODS = new Set([
 export type ReadOnlyHelloZenTransportOptions = {
   readonlyToken: string;
   locationId: string;
+  companyId?: string;
   requestTimeoutMs: number;
   fetchImpl?: FetchFn;
 };
@@ -34,14 +37,17 @@ export class ReadOnlyHelloZenTransport {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  async getJson(endpoint: HelloZenReadEndpoint): Promise<unknown> {
-    const url = buildHelloZenUrl(this.options.locationId, endpoint);
-    return this.requestGet(url);
+  async getJson(request: HelloZenReadRequest): Promise<unknown> {
+    const url = buildHelloZenRequestUrl(request, {
+      locationId: this.options.locationId,
+      companyId: this.options.companyId,
+    });
+    return this.requestGet(url, getApiVersionForRequest(request));
   }
 
   /** @internal Exposed for security tests */
-  async requestGet(url: URL): Promise<unknown> {
-  this.assertPermittedUrl(url);
+  async requestGet(url: URL, apiVersion?: string): Promise<unknown> {
+    this.assertPermittedUrl(url);
     const method = 'GET';
     if (method !== 'GET' || REJECTED_METHODS.has(method)) {
       throw new HelloZenError(
@@ -62,7 +68,7 @@ export class ReadOnlyHelloZenTransport {
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${this.options.readonlyToken}`,
-          Version: HELLOZEN_API_VERSION,
+          Version: apiVersion ?? '2021-07-28',
         },
         signal: controller.signal,
       });
@@ -103,38 +109,16 @@ export class ReadOnlyHelloZenTransport {
   }
 
   private assertPermittedUrl(url: URL): void {
-    if (url.origin !== HELLOZEN_API_ORIGIN) {
+    if (!isPermittedHelloZenUrl(url)) {
       throw new HelloZenError(
         HELLOZEN_ERROR_MESSAGES.invalidResponse,
         'internal',
       );
     }
 
-    const permittedPaths = [
-      '/locations/',
-      '/opportunities/pipelines',
-      '/calendars/',
-      '/workflows/',
-    ];
-    const allowed = permittedPaths.some((prefix) =>
-      url.pathname.startsWith(prefix),
-    );
-    if (!allowed) {
-      throw new HelloZenError(
-        HELLOZEN_ERROR_MESSAGES.invalidResponse,
-        'internal',
-      );
-    }
-
-    if (url.searchParams.size > 1) {
-      throw new HelloZenError(
-        HELLOZEN_ERROR_MESSAGES.invalidResponse,
-        'internal',
-      );
-    }
-
-    const model = url.searchParams.get('model');
-    if (model && model !== 'opportunity') {
+    try {
+      assertPermittedQueryParams(url);
+    } catch {
       throw new HelloZenError(
         HELLOZEN_ERROR_MESSAGES.invalidResponse,
         'internal',
@@ -247,3 +231,5 @@ function concatUint8Arrays(
   }
   return result;
 }
+
+export { HELLOZEN_API_ORIGIN };

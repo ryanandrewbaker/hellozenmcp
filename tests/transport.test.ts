@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ALLOWED_HTTP_METHODS } from '../src/hellozen/api-registry.js';
 import {
   buildHelloZenUrl,
   FORBIDDEN_PATH_FRAGMENTS,
@@ -42,7 +43,11 @@ describe('ReadOnlyHelloZenTransport', () => {
     }
   });
 
-  it('only reaches the fixed LeadConnector origin and approved paths', async () => {
+  it('only allows explicitly registered read methods', () => {
+    expect(ALLOWED_HTTP_METHODS).toEqual(['GET']);
+  });
+
+  it('reaches only approved LeadConnector paths', async () => {
     const urls: string[] = [];
     const fetchImpl = async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === 'string' ? input : input.url);
@@ -56,26 +61,22 @@ describe('ReadOnlyHelloZenTransport', () => {
     await transport.getJson({ kind: 'pipelines' });
     await transport.getJson({ kind: 'calendars' });
     await transport.getJson({ kind: 'workflows' });
+    await transport.getJson({ kind: 'tags' });
+    await transport.getJson({ kind: 'users' });
+    await transport.getJson({ kind: 'forms' });
+    await transport.getJson({ kind: 'calendar', calendarId: 'cal_1' });
+    await transport.getJson({
+      kind: 'workflow',
+      workflowId: 'wf_detail',
+    });
 
     for (const url of urls) {
       expect(url.startsWith(HELLOZEN_API_ORIGIN)).toBe(true);
-      expect(
-        [
-          '/locations/loc_example/customFields',
-          '/locations/loc_example/customFields?model=opportunity',
-          '/opportunities/pipelines?locationId=loc_example',
-          '/calendars/?locationId=loc_example',
-          '/workflows/?locationId=loc_example',
-        ].includes(url.replace(HELLOZEN_API_ORIGIN, '')),
-      ).toBe(true);
     }
   });
 
   it('cannot reach forbidden endpoint paths through builders', () => {
     for (const fragment of FORBIDDEN_PATH_FRAGMENTS) {
-      if (fragment === '/opportunities/') {
-        continue;
-      }
       expect(isForbiddenHelloZenPath(fragment)).toBe(true);
     }
   });

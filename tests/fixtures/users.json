@@ -1,0 +1,11 @@
+{
+  "users": [
+    {
+      "id": "user_1",
+      "firstName": "Kelly",
+      "lastName": "Baker",
+      "role": "admin",
+      "email": "must-not-leak@example.com"
+    }
+  ]
+}

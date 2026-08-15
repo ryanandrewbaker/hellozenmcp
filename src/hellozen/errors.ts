@@ -4,6 +4,7 @@ export type HelloZenErrorCategory =
   | 'invalid_response'
   | 'timeout'
   | 'upstream'
+  | 'freshness'
   | 'rate_limit'
   | 'internal';
 
@@ -22,5 +23,7 @@ export const HELLOZEN_ERROR_MESSAGES = {
   accessDenied: 'HelloZen denied access to this configuration resource.',
   invalidResponse: 'HelloZen returned an invalid configuration response.',
   timeout: 'HelloZen configuration request timed out.',
+  freshness:
+    'A live HelloZen refresh was requested but upstream data could not be fetched.',
   rateLimit: 'Tool rate limit exceeded. Try again shortly.',
 } as const;

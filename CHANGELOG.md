@@ -4,6 +4,39 @@ All notable changes to HelloZen Read-Only MCP are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-08-15
+
+### Added
+
+- Configuration auditor tools: `get_workflow`, `get_calendar`, `list_tags`, `list_users`, `list_forms`, `audit_configuration_dependencies`, `audit_configuration`, `get_configuration_snapshot`, `get_capabilities`
+- Freshness metadata on every tool response (`meta.source`, `meta.fetchedAt`, `meta.cacheAgeMs`, `meta.complete`)
+- Optional `fresh: true` tool argument to bypass MCP cache (explicit error on upstream failure — no stale-as-live)
+- Central API registry with per-endpoint version and scope documentation
+- Workflow dependency extraction and reverse-reference audit index
+- Calendar detail + availability schedule reads
+- Secret redaction utilities and expanded read-only boundary tests
+- [docs/configuration-auditor.md](docs/configuration-auditor.md) with visibility matrix and audit semantics
+
+### Changed
+
+- MCP server version metadata reports `2.0.0`
+- `ReadOnlyHelloZenClient` returns `{ data, meta }` wrappers
+- Transport allowlist expanded for tags, users, forms, calendar detail, workflow detail (GET only)
+
+### Security
+
+- Read-only guard remains GET-only with explicit endpoint registry
+- No contact, submission, or PII surfaces added
+
+### Required scopes (new)
+
+- `locations/tags.readonly`, `users.readonly`, `forms.readonly` for full auditor coverage
+
+### Known limitations
+
+- Official `workflows.readonly` API typically returns metadata only; full trigger/action graphs may be unavailable
+- Form definitions are inventory-only via `GET /forms/`
+
 ## [1.1.1] - 2026-08-15
 
 ### Security

@@ -8,6 +8,7 @@ async function main(): Promise<void> {
   const client = new ReadOnlyHelloZenClient({
     readonlyToken: config.readonlyToken,
     locationId: config.locationId,
+    companyId: config.companyId,
     requestTimeoutMs: config.requestTimeoutMs,
     cacheTtlSeconds: 0,
   });
@@ -15,19 +16,31 @@ async function main(): Promise<void> {
   const checks: Array<{ label: string; run: () => Promise<number> }> = [
     {
       label: 'Custom fields',
-      run: async () => (await client.listCustomFields('all')).length,
+      run: async () => (await client.listCustomFields('all')).data.length,
     },
     {
       label: 'Pipelines',
-      run: async () => (await client.listPipelines()).length,
+      run: async () => (await client.listPipelines()).data.length,
     },
     {
       label: 'Calendars',
-      run: async () => (await client.listCalendars()).length,
+      run: async () => (await client.listCalendars()).data.length,
     },
     {
       label: 'Workflows',
-      run: async () => (await client.listWorkflows()).length,
+      run: async () => (await client.listWorkflows()).data.length,
+    },
+    {
+      label: 'Tags',
+      run: async () => (await client.listTags()).data.length,
+    },
+    {
+      label: 'Users',
+      run: async () => (await client.listUsers()).data.length,
+    },
+    {
+      label: 'Forms',
+      run: async () => (await client.listForms()).data.length,
     },
   ];
 

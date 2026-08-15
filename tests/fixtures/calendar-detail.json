@@ -1,0 +1,21 @@
+{
+  "calendar": {
+    "id": "cal_1",
+    "name": "Portrait Planning Call",
+    "description": "30-minute planning consultation",
+    "slotDuration": 30,
+    "isActive": true,
+    "timezone": "Australia/Melbourne",
+    "groupId": "grp_1",
+    "calendarType": "round_robin",
+    "slotInterval": 15,
+    "teamMembers": [{ "userId": "user_1", "name": "Kelly Baker" }],
+    "allowReschedule": true,
+    "allowCancellation": true,
+    "preBuffer": 5,
+    "postBuffer": 10,
+    "appointmentPerDay": 8,
+    "openHours": [{ "day": "monday", "hours": [{ "open": "09:00", "close": "17:00" }] }],
+    "locationId": "must-not-leak"
+  }
+}

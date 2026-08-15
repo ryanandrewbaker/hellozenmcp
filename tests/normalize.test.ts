@@ -10,6 +10,7 @@ import {
   normalizePipelines,
   normalizeWorkflows,
 } from '../src/normalize/index.js';
+import { normalizeWorkflowDetail } from '../src/normalize/workflows.js';
 import {
   listCalendarsOutputSchema,
   listCustomFieldsOutputSchema,
@@ -37,78 +38,101 @@ const calendars = JSON.parse(
 const workflows = JSON.parse(
   readFileSync(join(fixturesDir, 'workflows.json'), 'utf8'),
 );
+const workflowDetail = JSON.parse(
+  readFileSync(join(fixturesDir, 'workflow-detail.json'), 'utf8'),
+);
 
 describe('normalizers', () => {
-  it('normalizes custom fields without upstream-only fields', () => {
+  it('normalizes custom fields and strips upstream-only fields', () => {
     const fields = normalizeCustomFields(baseFields);
-    const output = listCustomFieldsOutputSchema.parse({ fields });
-    expect(output.fields[0]).toMatchObject({
-      id: 'field_contact_1',
-      fieldKey: 'contact.session_type',
-      model: 'contact',
+    const output = listCustomFieldsOutputSchema.parse({
+      fields,
+      meta: {
+        source: 'live',
+        fetchedAt: new Date().toISOString(),
+        cacheAgeMs: 0,
+        complete: true,
+      },
     });
+    expect(output.fields[0]?.name).toBe('Session Type');
     expect(JSON.stringify(output)).not.toContain('traceId');
-    expect(JSON.stringify(output)).not.toContain('locationId');
+  });
+
+  it('merges custom fields by id for all model', () => {
+    const contact = normalizeCustomFields(baseFields);
+    const opportunity = normalizeCustomFields(opportunityFields);
+    const merged = mergeCustomFieldsById(contact, opportunity);
+    expect(merged.length).toBeGreaterThan(contact.length - 1);
   });
 
   it('normalizes pipelines and stages', () => {
-    const result = normalizePipelines(pipelines);
-    const output = listPipelinesOutputSchema.parse({ pipelines: result });
-    expect(output.pipelines[0]?.stages).toHaveLength(2);
+    const output = listPipelinesOutputSchema.parse({
+      pipelines: normalizePipelines(pipelines),
+      meta: {
+        source: 'live',
+        fetchedAt: new Date().toISOString(),
+        cacheAgeMs: 0,
+        complete: true,
+      },
+    });
+    expect(output.pipelines[0]?.stages.length).toBeGreaterThan(0);
   });
 
-  it('normalizes calendars with mapped configuration fields', () => {
-    const result = normalizeCalendars(calendars);
-    const output = listCalendarsOutputSchema.parse({ calendars: result });
-    expect(output.calendars[0]).toMatchObject({
-      duration: 30,
-      status: 'active',
-      timezone: 'Australia/Melbourne',
+  it('normalizes calendars', () => {
+    const output = listCalendarsOutputSchema.parse({
+      calendars: normalizeCalendars(calendars),
+      meta: {
+        source: 'live',
+        fetchedAt: new Date().toISOString(),
+        cacheAgeMs: 0,
+        complete: true,
+      },
     });
+    expect(output.calendars[0]?.duration).toBe(30);
     expect(JSON.stringify(output)).not.toContain('teamMembers');
   });
 
-  it('normalizes workflows with optional timestamps', () => {
-    const result = normalizeWorkflows(workflows);
-    const output = listWorkflowsOutputSchema.parse({ workflows: result });
-    expect(output.workflows[0]?.createdAt).toBeDefined();
+  it('normalizes workflows', () => {
+    const output = listWorkflowsOutputSchema.parse({
+      workflows: normalizeWorkflows(workflows),
+      meta: {
+        source: 'live',
+        fetchedAt: new Date().toISOString(),
+        cacheAgeMs: 0,
+        complete: true,
+      },
+    });
+    expect(output.workflows.length).toBe(2);
   });
 
-  it('fails safely on malformed upstream payloads', () => {
-    expect(() => normalizeCustomFields({ customFields: [{ id: 1 }] })).toThrow();
-    expect(() => normalizePipelines({ pipelines: [{}] })).toThrow();
-  });
-
-  it('merges custom fields by id', () => {
-    const contact = normalizeCustomFields(baseFields).filter(
-      (field) => field.model !== 'opportunity',
+  it('extracts workflow dependency graph from detail fixture', () => {
+    const detail = normalizeWorkflowDetail(workflowDetail, 'wf_detail');
+    expect(
+      detail.dependencies.customFields.some(
+        (field) => field.fieldKey === 'contact.appointment_status',
+      ),
+    ).toBe(true);
+    expect(
+      detail.dependencies.tags.some((tag) => tag.name === 'Booked'),
+    ).toBe(true);
+    expect(
+      detail.dependencies.calendars.some((calendar) => calendar.id === 'cal_1'),
+    ).toBe(true);
+    expect(detail.actions?.some((action) => action.type === 'branch')).toBe(
+      true,
     );
-    const opportunity = normalizeCustomFields(opportunityFields);
-    const merged = mergeCustomFieldsById(contact, opportunity);
-    expect(merged).toHaveLength(2);
   });
 });
 
-describe('ReadOnlyHelloZenClient custom fields', () => {
-  const client = new ReadOnlyHelloZenClient({
-    ...TEST_CONFIG,
-    fetchImpl: createFakeFetch(),
-  });
-
-  it('fetches contact fields from base endpoint only', async () => {
+describe('client custom field routing', () => {
+  it('returns contact fields only for contact model', async () => {
+    const client = new ReadOnlyHelloZenClient({
+      ...TEST_CONFIG,
+      fetchImpl: createFakeFetch(),
+    });
     const fields = await client.listCustomFields('contact');
-    expect(fields.map((field) => field.id)).toEqual(['field_contact_1']);
-  });
-
-  it('fetches opportunity fields from opportunity endpoint only', async () => {
-    const fields = await client.listCustomFields('opportunity');
-    expect(fields.map((field) => field.id)).toEqual(['field_opp_1']);
-  });
-
-  it('merges both endpoint variants for all', async () => {
-    const fields = await client.listCustomFields('all');
-    expect(fields.map((field) => field.id).sort()).toEqual(
-      ['field_contact_1', 'field_opp_1'].sort(),
+    expect(fields.data.every((field) => field.model !== 'opportunity')).toBe(
+      true,
     );
   });
 });

@@ -25,7 +25,22 @@ const responses: Record<string, unknown> = {
     'pipelines.json',
   ),
   '/calendars/?locationId=loc_example': loadFixture('calendars.json'),
+  '/calendars/cal_1': loadFixture('calendar-detail.json'),
+  '/calendars/schedules/event-calendar/cal_1': loadFixture(
+    'calendar-schedule.json',
+  ),
   '/workflows/?locationId=loc_example': loadFixture('workflows.json'),
+  '/workflows/wf_detail?locationId=loc_example': loadFixture(
+    'workflow-detail.json',
+  ),
+  '/workflows/wf_1?locationId=loc_example': {
+    workflow: (
+      loadFixture('workflows.json') as { workflows: unknown[] }
+    ).workflows[0],
+  },
+  '/locations/loc_example/tags': loadFixture('tags.json'),
+  '/users/search?locationId=loc_example': loadFixture('users.json'),
+  '/forms/?locationId=loc_example': loadFixture('forms.json'),
 };
 
 export function createFakeFetch(

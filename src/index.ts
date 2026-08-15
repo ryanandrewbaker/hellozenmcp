@@ -8,6 +8,7 @@ const config = loadConfig();
 const client = new ReadOnlyHelloZenClient({
   readonlyToken: config.readonlyToken,
   locationId: config.locationId,
+  companyId: config.companyId,
   requestTimeoutMs: config.requestTimeoutMs,
   cacheTtlSeconds: config.cacheTtlSeconds,
 });

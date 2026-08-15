@@ -228,6 +228,9 @@ export function normalizeWorkflows(payload: unknown): WorkflowOutput[] {
       ...(workflow.data.updatedAt
         ? { updatedAt: workflow.data.updatedAt }
         : {}),
+      ...(workflow.data.version !== undefined
+        ? { version: workflow.data.version }
+        : {}),
     });
   }
 
