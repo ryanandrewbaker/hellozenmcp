@@ -73,4 +73,12 @@ describe('loadConfig', () => {
     expect(config.locationId).toBe('loc_example');
     expect(config.port).toBe(8790);
   });
+
+  it('treats empty HELLOZEN_MCP_COMPANY_ID as unset', () => {
+    const config = loadConfig({
+      ...baseEnv,
+      HELLOZEN_MCP_COMPANY_ID: '',
+    });
+    expect(config.companyId).toBeUndefined();
+  });
 });

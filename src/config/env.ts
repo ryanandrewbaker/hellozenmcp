@@ -16,7 +16,11 @@ const tokenSchema = z
 const envSchema = z.object({
   HELLOZEN_MCP_READONLY_TOKEN: tokenSchema,
   HELLOZEN_MCP_LOCATION_ID: locationIdSchema,
-  HELLOZEN_MCP_COMPANY_ID: z.string().min(1).max(64).optional(),
+  HELLOZEN_MCP_COMPANY_ID: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().min(1).max(64).optional(),
+  ),
   HELLOZEN_MCP_PORT: z.coerce.number().int().min(1).max(65535).default(8790),
   HELLOZEN_MCP_BIND_HOST: z.string().min(1).default('0.0.0.0'),
   HELLOZEN_MCP_REQUEST_TIMEOUT_MS: z.coerce
