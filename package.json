@@ -1,6 +1,6 @@
 {
   "name": "hellozenmcp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "An unofficial, self-hosted, strictly read-only MCP connector designed for inspecting HelloZen configuration.",
   "type": "module",

@@ -1,6 +1,6 @@
 # HelloZen Read-Only MCP
 
-**HelloZen MCP 1.1** — private operations release. See [CHANGELOG.md](CHANGELOG.md). Tag `v1.0.0` remains the rollback baseline.
+**HelloZen MCP 1.1** — private operations release (`v1.1.1` latest). See [CHANGELOG.md](CHANGELOG.md). Tag `v1.0.0` remains the rollback baseline.
 
 An unofficial, self-hosted, strictly read-only MCP connector designed for inspecting HelloZen configuration.
 
