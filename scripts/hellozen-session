@@ -187,6 +187,9 @@ ensure_mcp_running() {
   local container_state
   container_state="$(mcp_container_state)"
   if [[ "$container_state" == "running" ]]; then
+    if wait_for_url "$MCP_HEALTH_URL" "$HEALTH_TIMEOUT_SEC"; then
+      return 0
+    fi
     echo "MCP container running but health check failed (${MCP_HEALTH_URL})" >&2
     return 1
   fi
