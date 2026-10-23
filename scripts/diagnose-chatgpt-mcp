@@ -90,9 +90,8 @@ if ! health_ok "http://127.0.0.1:${MCP_PORT}/healthz" && health_ok "http://${PUB
   echo "LIKELY ISSUE: MCP is only reachable on ${PUBLISH_HOST}, not 127.0.0.1."
   echo "tunnel-client defaults to 127.0.0.1 upstream — ChatGPT will not see v2."
   echo
-  echo "Fix (pick one):"
-  echo "  1. docker compose -f compose.yml -f compose.vision-lan.yml up -d --no-build hellozen-mcp"
-  echo "  2. Set tunnel MCP url to http://${PUBLISH_HOST}:${MCP_PORT}/mcp in ${TUNNEL_CONFIG}"
-  echo "Then: ./scripts/hellozen-session stop && ./scripts/hellozen-session start"
+  echo "Fix:"
+  echo "  ./scripts/hellozen-session stop && ./scripts/hellozen-session start"
+  echo "  (session script auto-applies compose.vision-lan.yml when publish host is not 127.0.0.1)"
   echo "Then: create a NEW OpenAI tunnel + NEW ChatGPT connector (tool list may be cached per tunnel)."
 fi

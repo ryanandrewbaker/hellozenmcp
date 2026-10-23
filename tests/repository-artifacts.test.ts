@@ -58,6 +58,15 @@ describe('repository artifact security', () => {
     expect(envExample).not.toMatch(/pit-[a-z0-9-]+/i);
   });
 
+  it('pins patched Node 24 LTS in Dockerfile and .node-version', () => {
+    const dockerfile = readRepoFile('Dockerfile');
+    const nodeVersion = readRepoFile('.node-version').trim();
+
+    expect(nodeVersion).toMatch(/^24\.\d+\.\d+$/);
+    expect(dockerfile).toContain(`node:${nodeVersion}-alpine`);
+    expect(dockerfile.match(/FROM node:24\.\d+\.\d+-alpine/g)?.length).toBe(2);
+  });
+
   it('does not copy secrets or use broad COPY in Dockerfile', () => {
     const dockerfile = readRepoFile('Dockerfile');
 

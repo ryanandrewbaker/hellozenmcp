@@ -5,7 +5,7 @@
   "description": "An unofficial, self-hosted, strictly read-only MCP connector designed for inspecting HelloZen configuration.",
   "type": "module",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.22.1"
   },
   "main": "dist/index.js",
   "scripts": {
@@ -22,7 +22,7 @@
     "session:doctor": "scripts/hellozen-session doctor"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
-    "@types/node": "^22.13.10",
+    "@types/node": "^24.19.2",
     "@types/supertest": "^6.0.2",
     "supertest": "^7.0.0",
     "tsx": "^4.19.3",

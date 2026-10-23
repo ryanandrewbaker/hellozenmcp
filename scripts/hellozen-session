@@ -41,6 +41,16 @@ TUNNEL_CLIENT="$TUNNEL_RUNTIME_DIR/tunnel-client"
 TUNNEL_LOG="$TUNNEL_RUNTIME_DIR/tunnel.log"
 HEALTH_TIMEOUT_SEC="${HELLOZEN_SESSION_HEALTH_TIMEOUT_SEC:-30}"
 TUNNEL_START_TIMEOUT_SEC="${HELLOZEN_SESSION_TUNNEL_TIMEOUT_SEC:-45}"
+LOOPBACK_HEALTH_URL="http://127.0.0.1:${MCP_PORT}/healthz"
+
+COMPOSE_ARGS=(-f compose.yml)
+if [[ "$PUBLISH_HOST" != "127.0.0.1" ]]; then
+  COMPOSE_ARGS+=(-f compose.vision-lan.yml)
+fi
+
+dc() {
+  docker compose "${COMPOSE_ARGS[@]}" "$@"
+}
 
 usage() {
   cat <<'EOF'
@@ -118,7 +128,7 @@ mcp_container_state() {
     return
   fi
   local line
-  line="$(docker compose ps hellozen-mcp --format '{{.State}}' 2>/dev/null | head -1 || true)"
+  line="$(dc ps hellozen-mcp --format '{{.State}}' 2>/dev/null | head -1 || true)"
   if [[ -z "$line" ]]; then
     echo "stopped"
   else
@@ -175,14 +185,32 @@ wait_for_url() {
   return 1
 }
 
+ensure_mcp_dual_bind() {
+  [[ "$PUBLISH_HOST" == "127.0.0.1" ]] && return 0
+  curl_ok "$LOOPBACK_HEALTH_URL" && return 0
+
+  command -v docker >/dev/null 2>&1 || return 0
+  echo "Recreating hellozen-mcp for dual bind (127.0.0.1 + ${PUBLISH_HOST})..." >&2
+  dc up -d --no-build --force-recreate hellozen-mcp
+  wait_for_url "$LOOPBACK_HEALTH_URL" "$HEALTH_TIMEOUT_SEC" \
+    || die "loopback MCP not reachable at ${LOOPBACK_HEALTH_URL} — run: docker port hellozen-mcp ${MCP_PORT}"
+  wait_for_url "$MCP_HEALTH_URL" "$HEALTH_TIMEOUT_SEC" \
+    || die "LAN MCP not reachable at ${MCP_HEALTH_URL}"
+}
+
 ensure_mcp_running() {
+  command -v docker >/dev/null 2>&1 || die 'docker is required'
+
+  ensure_mcp_dual_bind
+
   local state
   state="$(mcp_health_label)"
   if [[ "$state" == "healthy" ]]; then
+    if [[ "$PUBLISH_HOST" != "127.0.0.1" ]] && ! curl_ok "$LOOPBACK_HEALTH_URL"; then
+      die "LAN MCP is healthy but loopback is not — tunnel upstream may fail (expected ${LOOPBACK_HEALTH_URL})"
+    fi
     return 0
   fi
-
-  command -v docker >/dev/null 2>&1 || die 'docker is required'
 
   local container_state
   container_state="$(mcp_container_state)"
@@ -194,13 +222,17 @@ ensure_mcp_running() {
     return 1
   fi
 
-  if docker compose ps -a hellozen-mcp --format '{{.Name}}' 2>/dev/null | grep -q hellozen-mcp; then
-    docker compose start hellozen-mcp
+  if dc ps -a hellozen-mcp --format '{{.Name}}' 2>/dev/null | grep -q hellozen-mcp; then
+    dc start hellozen-mcp
   else
-    docker compose up -d --no-build hellozen-mcp
+    dc up -d --no-build hellozen-mcp
   fi
 
   if wait_for_url "$MCP_HEALTH_URL" "$HEALTH_TIMEOUT_SEC"; then
+    if [[ "$PUBLISH_HOST" != "127.0.0.1" ]]; then
+      wait_for_url "$LOOPBACK_HEALTH_URL" "$HEALTH_TIMEOUT_SEC" \
+        || die "LAN MCP is up but loopback is not (${LOOPBACK_HEALTH_URL})"
+    fi
     return 0
   fi
   die "MCP did not become healthy within ${HEALTH_TIMEOUT_SEC}s"
@@ -209,8 +241,8 @@ ensure_mcp_running() {
 warn_tunnel_upstream_mismatch() {
   [[ -f "$TUNNEL_CONFIG" ]] || return 0
   if grep -q "127.0.0.1:${MCP_PORT}" "$TUNNEL_CONFIG" 2>/dev/null \
-    && [[ "$PUBLISH_HOST" != "127.0.0.1" ]]; then
-    echo "warning: tunnel config may still reference 127.0.0.1 — expected ${MCP_MCP_URL}" >&2
+    && ! curl_ok "$LOOPBACK_HEALTH_URL"; then
+    echo "warning: tunnel points to 127.0.0.1 but loopback MCP is unreachable — set url to ${MCP_MCP_URL} in ${TUNNEL_CONFIG}" >&2
   fi
 }
 
@@ -284,7 +316,7 @@ cmd_stop() {
   validate_publish_host
   stop_owned_tunnel
   if command -v docker >/dev/null 2>&1; then
-    docker compose stop hellozen-mcp 2>/dev/null || true
+    dc stop hellozen-mcp 2>/dev/null || true
   fi
   print_status
 }
